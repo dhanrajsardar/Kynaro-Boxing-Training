@@ -1,0 +1,6 @@
+{
+  "name": "KYNARO: Boxing Training",
+  "description": "An AI-guided 3D boxing training coach app featuring personalized 30-day fight camps, interactive pad drills, real-time camera stance positioning, and round workouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

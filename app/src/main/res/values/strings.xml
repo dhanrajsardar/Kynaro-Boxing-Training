@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">KYNARO: Boxing Training</string>
+    <string name="welcome_badge">KYNARO AI COACH</string>
+    <string name="welcome_title">Your coach can see you punch.</string>
+    <string name="welcome_feature_1">START YOUR BOXING JOURNEY</string>
+    <string name="welcome_feature_2">30-day fight camp</string>
+    <string name="welcome_feature_3">A 3D coach on every drill</string>
+    <string name="get_started">GET STARTED</string>
+    <string name="continue_label">CONTINUE</string>
+    <string name="got_it">GOT IT</string>
+    <string name="i_got_it">I GOT IT</string>
+    <string name="open_camera">OPEN CAMERA</string>
+    <string name="skip_for_now">Skip for now</string>
+    <string name="start_my_30_days">START MY 30 DAYS</string>
+    <string name="unlock_my_fight_camp">UNLOCK MY FIGHT CAMP</string>
+    <string name="start_mission">START MISSION</string>
+</resources>
