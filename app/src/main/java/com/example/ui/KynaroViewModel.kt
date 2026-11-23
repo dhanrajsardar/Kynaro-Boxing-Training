@@ -11,6 +11,7 @@ import com.example.model.BoxingDrill
 import com.example.model.CampMission
 import com.example.model.OnboardingAnswers
 import com.example.model.WorkoutExerciseStep
+import com.example.ui.screens.KynaroSubscriptionPlan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ enum class AppScreenDestination {
     WELCOME,
     ONBOARDING,
     PREPARATION,
+    PAYWALL,
     MAIN_TRAINING,
     WORKOUT
 }
@@ -71,6 +73,13 @@ class KynaroViewModel(application: Application) : AndroidViewModel(application) 
     private val _activeWorkout = MutableStateFlow<ActiveWorkoutSpec?>(null)
     val activeWorkout: StateFlow<ActiveWorkoutSpec?> = _activeWorkout.asStateFlow()
 
+    private val _activePlan = MutableStateFlow(KynaroSubscriptionPlan.ANNUAL)
+    val activePlan: StateFlow<KynaroSubscriptionPlan> = _activePlan.asStateFlow()
+
+    fun selectSubscriptionPlan(plan: KynaroSubscriptionPlan) {
+        _activePlan.value = plan
+    }
+
     init {
         viewModelScope.launch {
             val saved = repository.onboardingAnswersFlow.first()
@@ -87,6 +96,13 @@ class KynaroViewModel(application: Application) : AndroidViewModel(application) 
     fun updateOnboardingAnswers(updated: OnboardingAnswers) {
         viewModelScope.launch {
             repository.saveOnboardingAnswers(updated)
+        }
+    }
+
+    fun completePreparationToPaywall(finalAnswers: OnboardingAnswers) {
+        viewModelScope.launch {
+            repository.saveOnboardingAnswers(finalAnswers.copy(onboardingCompleted = true))
+            _currentScreen.value = AppScreenDestination.PAYWALL
         }
     }
 

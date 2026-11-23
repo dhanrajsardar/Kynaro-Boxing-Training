@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,7 +59,8 @@ import com.example.ui.components.KynaroScreenBackground
 import com.example.ui.theme.KynaroBlack
 import com.example.ui.theme.KynaroCardBg
 import com.example.ui.theme.KynaroCardBorder
-import com.example.ui.theme.KynaroGreen
+import com.example.ui.theme.KynaroOrange
+import com.example.ui.theme.KynaroOrangeDark
 import com.example.ui.theme.KynaroRed
 import com.example.ui.theme.KynaroTextSecondary
 import com.example.ui.theme.KynaroTextWhite
@@ -94,24 +92,23 @@ enum class RoundState {
 
 data class ComboCallout(
     val calloutText: String,
-    val punchTokens: List<String>
+    val punchTokens: List<String>,
+    val pose: CoachPose
 )
 
 private val tacticalCombos = listOf(
-    ComboCallout("1 - 2!", listOf("1 JAB", "2 CROSS")),
-    ComboCallout("1 - 2 - 3!", listOf("1 JAB", "2 CROSS", "3 HOOK")),
-    ComboCallout("1 - 1 - 2!", listOf("1 JAB", "1 JAB", "2 CROSS")),
-    ComboCallout("1 - SLIP - 2!", listOf("1 JAB", "SLIP", "2 CROSS")),
-    ComboCallout("2 - 3 - 2!", listOf("2 CROSS", "3 HOOK", "2 CROSS")),
-    ComboCallout("1 - 2 - 5 - 2!", listOf("1 JAB", "2 CROSS", "5 UPPERCUT", "2 CROSS")),
-    ComboCallout("SLIP - ROLL - 3 - 2!", listOf("SLIP", "ROLL", "3 HOOK", "2 CROSS")),
-    ComboCallout("1 - 2 - ROLL - 2!", listOf("1 JAB", "2 CROSS", "ROLL", "2 CROSS")),
-    ComboCallout("1 - 2 - 3 - 6!", listOf("1 JAB", "2 CROSS", "3 HOOK", "6 UPPERCUT")),
-    ComboCallout("DOUBLE JAB - CROSS!", listOf("1 JAB", "1 JAB", "2 CROSS"))
+    ComboCallout("1 - 2!", listOf("1 JAB", "2 CROSS"), CoachPose.ONE_TWO_COMBO),
+    ComboCallout("1 - 2 - 3!", listOf("1 JAB", "2 CROSS", "3 HOOK"), CoachPose.JAB_CROSS_HOOK),
+    ComboCallout("1 - 1 - 2!", listOf("1 JAB", "1 JAB", "2 CROSS"), CoachPose.JAB),
+    ComboCallout("SLIP - 2!", listOf("SLIP", "2 CROSS"), CoachPose.SLIP_DEFENSE),
+    ComboCallout("1 - 2 - 6!", listOf("1 JAB", "2 CROSS", "6 UPPERCUT"), CoachPose.UPPERCUT),
+    ComboCallout("SPEED FLURRY!", listOf("1 JAB", "2 CROSS", "1 JAB", "2 CROSS"), CoachPose.SPEED_HANDS),
+    ComboCallout("STEP - PIVOT!", listOf("STEP IN", "90° PIVOT"), CoachPose.FOOTWORK)
 )
 
 @Composable
 fun HeavyBagRoundTimerScreen(
+    isSouthpaw: Boolean = false,
     onClose: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -125,7 +122,6 @@ fun HeavyBagRoundTimerScreen(
     var totalPunchesLanded by remember { mutableIntStateOf(0) }
     var estCaloriesBurned by remember { mutableFloatStateOf(0f) }
 
-    // Timer Loop
     LaunchedEffect(currentRoundState, isPaused, secondsRemaining) {
         if (isPaused) return@LaunchedEffect
 
@@ -147,12 +143,10 @@ fun HeavyBagRoundTimerScreen(
                     estCaloriesBurned += 0.28f
                     totalPunchesLanded += 2
 
-                    // 10-second warning clapper
                     if (secondsRemaining == 10) {
                         BoxingAudioEngine.playTenSecondWarning(scope)
                     }
 
-                    // Combo caller rhythm every 5 seconds
                     if (isComboCallerEnabled && secondsRemaining % 5 == 0 && secondsRemaining > 5) {
                         currentComboIndex = (currentComboIndex + 1) % tacticalCombos.size
                         BoxingAudioEngine.playComboChime(scope)
@@ -193,7 +187,6 @@ fun HeavyBagRoundTimerScreen(
                 .padding(horizontal = 22.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Nav Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -206,25 +199,21 @@ fun HeavyBagRoundTimerScreen(
                         .background(KynaroCardBg)
                         .testTag("close_round_timer_button")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = KynaroTextWhite
-                    )
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = KynaroTextWhite)
                 }
 
                 Row(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(Color(0xFF1A1608))
-                        .border(1.dp, KynaroRed.copy(alpha = 0.45f), CircleShape)
+                        .background(Color(0xFF1A120A))
+                        .border(1.dp, KynaroOrange.copy(alpha = 0.45f), CircleShape)
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.SportsMma,
                         contentDescription = null,
-                        tint = KynaroRed,
+                        tint = KynaroOrange,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -233,31 +222,24 @@ fun HeavyBagRoundTimerScreen(
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = KynaroRed,
+                        color = KynaroOrange,
                         letterSpacing = 1.sp
                     )
                 }
 
                 IconButton(
-                    onClick = {
-                        BoxingAudioEngine.playRoundStartBell(scope)
-                    },
+                    onClick = { BoxingAudioEngine.playRoundStartBell(scope) },
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(KynaroCardBg)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.VolumeUp,
-                        contentDescription = "Test Bell",
-                        tint = KynaroYellow
-                    )
+                    Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Test Bell", tint = KynaroYellow)
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
             if (currentRoundState == RoundState.CONFIG) {
-                // CONFIGURATION SCREEN
                 Text(
                     text = "PRO ROUND TIMER",
                     fontFamily = OswaldFontFamily,
@@ -266,27 +248,25 @@ fun HeavyBagRoundTimerScreen(
                     color = KynaroTextWhite,
                     textAlign = TextAlign.Center
                 )
-
                 Text(
-                    text = "Authentic boxing gym rounds, live combo caller, and bell cues.",
+                    text = "Real boxing rounds with live 3D Coach combo demos & gym bell cues.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = KynaroTextSecondary,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Presets Selection
                 TimerPreset.entries.forEach { preset ->
                     val isSelected = preset == selectedPreset
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
-                            .background(if (isSelected) Color(0xFF1A1608) else KynaroCardBg)
+                            .background(if (isSelected) Color(0xFF1B1209) else KynaroCardBg)
                             .border(
                                 1.dp,
-                                if (isSelected) KynaroRed else KynaroCardBorder,
+                                if (isSelected) KynaroOrange else KynaroCardBorder,
                                 RoundedCornerShape(18.dp)
                             )
                             .clickable {
@@ -302,7 +282,7 @@ fun HeavyBagRoundTimerScreen(
                                 fontFamily = OswaldFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
-                                color = if (isSelected) KynaroRed else KynaroTextWhite
+                                color = if (isSelected) KynaroOrange else KynaroTextWhite
                             )
                             Text(
                                 text = preset.description,
@@ -313,7 +293,7 @@ fun HeavyBagRoundTimerScreen(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(if (isSelected) KynaroRed else Color(0xFF1E1E24))
+                                .background(if (isSelected) KynaroOrange else Color(0xFF1E212B))
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -328,9 +308,8 @@ fun HeavyBagRoundTimerScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Combo Caller Toggle Card
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -346,12 +325,12 @@ fun HeavyBagRoundTimerScreen(
                             Icon(
                                 imageVector = Icons.Default.NotificationsActive,
                                 contentDescription = null,
-                                tint = KynaroYellow,
+                                tint = KynaroOrange,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "LIVE COMBO CALLER",
+                                text = "LIVE 3D COMBO CALLER",
                                 fontFamily = OswaldFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
@@ -360,7 +339,7 @@ fun HeavyBagRoundTimerScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Audible & visual combo calls (1-2, 1-2-3, Slips) during the round.",
+                            text = "3D Coach demonstrates every called combo in real time.",
                             style = MaterialTheme.typography.bodySmall,
                             color = KynaroTextSecondary
                         )
@@ -370,12 +349,12 @@ fun HeavyBagRoundTimerScreen(
                         onCheckedChange = { isComboCallerEnabled = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = KynaroTextWhite,
-                            checkedTrackColor = KynaroRed
+                            checkedTrackColor = KynaroOrange
                         )
                     )
                 }
 
-                Spacer(modifier = Modifier.height(26.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 KynaroPrimaryButton(
                     text = "START TRAINING ROUNDS",
@@ -390,10 +369,9 @@ fun HeavyBagRoundTimerScreen(
                     testTag = "start_heavy_bag_rounds_button"
                 )
             } else if (currentRoundState == RoundState.FINISHED) {
-                // FINISHED STATE
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "CHAMPIONSHIP COMPLETE",
+                    text = "ROUNDS COMPLETE",
                     fontFamily = OswaldFontFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 32.sp,
@@ -401,155 +379,132 @@ fun HeavyBagRoundTimerScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "${selectedPreset.totalRounds} Rounds Survived • Real Fighter Conditioning",
+                    text = "${selectedPreset.totalRounds} Rounds Completed",
                     style = MaterialTheme.typography.bodyMedium,
                     color = KynaroTextSecondary
                 )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
+                Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    StatMetricCard(
-                        title = "TOTAL PUNCHES",
-                        value = "$totalPunchesLanded",
-                        color = KynaroRed,
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatMetricCard(
-                        title = "CALORIES",
-                        value = "${estCaloriesBurned.toInt()} kcal",
-                        color = KynaroYellow,
-                        modifier = Modifier.weight(1f)
-                    )
+                    StatMetricCard("EST. STRIKES", "$totalPunchesLanded", KynaroOrange, Modifier.weight(1f))
+                    StatMetricCard("CALORIES", "${estCaloriesBurned.toInt()} kcal", KynaroYellow, Modifier.weight(1f))
                 }
-
-                Spacer(modifier = Modifier.height(30.dp))
-
-                KynaroPrimaryButton(
-                    text = "DONE",
-                    onClick = onClose
-                )
+                Spacer(modifier = Modifier.height(28.dp))
+                KynaroPrimaryButton(text = "DONE", onClick = onClose)
             } else {
-                // ACTIVE TIMER HUD
                 val isWork = currentRoundState == RoundState.WORK
                 val isRest = currentRoundState == RoundState.REST
                 val isGetReady = currentRoundState == RoundState.GET_READY
+                val activeCombo = tacticalCombos[currentComboIndex]
 
-                // Stage Badge
+                // Stage Badge + Clock Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isWork -> KynaroOrange
+                                    isRest -> Color(0xFF1E3A8A)
+                                    else -> KynaroYellow
+                                }
+                            )
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = when {
+                                isGetReady -> "GET READY"
+                                isWork -> "ROUND $currentRoundNumber / ${selectedPreset.totalRounds}"
+                                isRest -> "REST & RECOVER"
+                                else -> ""
+                            },
+                            fontFamily = SpaceGroteskFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = if (isRest) KynaroTextWhite else KynaroBlack
+                        )
+                    }
+
+                    val mins = secondsRemaining / 60
+                    val secs = secondsRemaining % 60
+                    Text(
+                        text = String.format("%02d:%02d", mins, secs),
+                        fontFamily = OswaldFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 46.sp,
+                        color = when {
+                            isWork && secondsRemaining <= 10 -> KynaroOrange
+                            isWork -> KynaroTextWhite
+                            isRest -> Color(0xFF60A5FA)
+                            else -> KynaroYellow
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // LIVE 3D COACH PERFORMING THE CURRENT COMBO
                 Box(
                     modifier = Modifier
-                        .clip(CircleShape)
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .clip(RoundedCornerShape(22.dp))
                         .background(
-                            when {
-                                isWork -> KynaroRed
-                                isRest -> Color(0xFF1E3A8A)
-                                else -> KynaroYellow
-                            }
+                            Brush.radialGradient(listOf(Color(0xFF1F160F), KynaroBlack))
                         )
-                        .padding(horizontal = 18.dp, vertical = 6.dp)
+                        .border(1.dp, KynaroCardBorder, RoundedCornerShape(22.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = when {
-                            isGetReady -> "GET READY"
-                            isWork -> "ROUND $currentRoundNumber OF ${selectedPreset.totalRounds}"
-                            isRest -> "REST & RECOVER"
-                            else -> ""
-                        },
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = if (isRest) KynaroTextWhite else KynaroBlack
+                    CoachCharacter3DView(
+                        pose = if (isWork && isComboCallerEnabled) activeCombo.pose else CoachPose.IDLE_GUARD,
+                        isPaused = isPaused,
+                        isSouthpaw = isSouthpaw,
+                        showFloorRing = true,
+                        showAnatomicalHighlights = isWork,
+                        allowCameraOrbit = true,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Huge Clock Display
-                val mins = secondsRemaining / 60
-                val secs = secondsRemaining % 60
-                val timeString = String.format("%02d:%02d", mins, secs)
-
-                Text(
-                    text = timeString,
-                    fontFamily = OswaldFontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 82.sp,
-                    lineHeight = 84.sp,
-                    color = when {
-                        isWork && secondsRemaining <= 10 -> KynaroRed
-                        isWork -> KynaroTextWhite
-                        isRest -> Color(0xFF60A5FA)
-                        else -> KynaroYellow
-                    }
-                )
-
-                if (isWork && secondsRemaining <= 10) {
-                    Text(
-                        text = "10 SECONDS! EMPTY THE TANK!",
-                        fontFamily = SpaceGroteskFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = KynaroRed
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // LIVE COMBO CALLER HUD (If Active)
                 if (isWork && isComboCallerEnabled) {
-                    val activeCombo = tacticalCombos[currentComboIndex]
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF1A1608), KynaroCardBg)
-                                )
-                            )
-                            .border(1.dp, KynaroRed.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                            .padding(16.dp),
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(KynaroCardBg)
+                            .border(1.dp, KynaroOrange.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                            .padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "CALLOUT COMBO",
-                            fontFamily = SpaceGroteskFontFamily,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = KynaroYellow,
-                            letterSpacing = 1.2.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = activeCombo.calloutText,
                             fontFamily = OswaldFontFamily,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 32.sp,
-                            color = KynaroTextWhite,
-                            textAlign = TextAlign.Center
+                            fontSize = 28.sp,
+                            color = KynaroTextWhite
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Tokens
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             activeCombo.punchTokens.forEach { token ->
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(KynaroRed)
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        .background(KynaroOrange)
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
                                 ) {
                                     Text(
                                         text = token,
                                         fontFamily = SpaceGroteskFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.sp,
                                         color = KynaroBlack
                                     )
                                 }
@@ -557,17 +512,16 @@ fun HeavyBagRoundTimerScreen(
                         }
                     }
                 } else if (isRest) {
-                    // Rest hint
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFF0F1A2E))
                             .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Text(
-                            text = "Deep nose inhalation, mouth exhalation. Shake out the shoulders and hydrate. Next round starts on the bell.",
+                            text = "Deep nose inhale, slow mouth exhale. Shake out shoulders — next round starts on the bell.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF93C5FD),
                             textAlign = TextAlign.Center
@@ -575,35 +529,12 @@ fun HeavyBagRoundTimerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Stats ticker
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    StatMetricCard(
-                        title = "STRIKES",
-                        value = "$totalPunchesLanded",
-                        color = KynaroRed,
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatMetricCard(
-                        title = "EST. KCAL",
-                        value = "${estCaloriesBurned.toInt()}",
-                        color = KynaroYellow,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // Play / Pause / Reset Controls
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Reset Button
                     IconButton(
                         onClick = {
                             currentRoundState = RoundState.CONFIG
@@ -611,29 +542,19 @@ fun HeavyBagRoundTimerScreen(
                             isPaused = false
                         },
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(52.dp)
                             .clip(CircleShape)
                             .background(KynaroCardBg)
                             .border(1.dp, KynaroCardBorder, CircleShape)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset Timer",
-                            tint = KynaroTextSecondary,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reset", tint = KynaroTextSecondary)
                     }
 
-                    // Main Pause/Resume Button
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
+                            .size(72.dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(KynaroRed, Color(0xFFD9A300))
-                                )
-                            )
+                            .background(Brush.radialGradient(listOf(KynaroOrange, KynaroOrangeDark)))
                             .clickable { isPaused = !isPaused }
                             .testTag("timer_pause_resume_button"),
                         contentAlignment = Alignment.Center
@@ -642,32 +563,23 @@ fun HeavyBagRoundTimerScreen(
                             imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                             contentDescription = if (isPaused) "Resume" else "Pause",
                             tint = KynaroBlack,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(34.dp)
                         )
                     }
 
-                    // Bell Test Button
                     IconButton(
-                        onClick = {
-                            BoxingAudioEngine.playRoundStartBell(scope)
-                        },
+                        onClick = { BoxingAudioEngine.playRoundStartBell(scope) },
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(52.dp)
                             .clip(CircleShape)
                             .background(KynaroCardBg)
                             .border(1.dp, KynaroCardBorder, CircleShape)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SportsMma,
-                            contentDescription = "Ring Bell",
-                            tint = KynaroYellow,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(imageVector = Icons.Default.SportsMma, contentDescription = "Bell", tint = KynaroYellow)
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

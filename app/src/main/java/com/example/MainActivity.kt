@@ -19,6 +19,7 @@ import com.example.ui.AppScreenDestination
 import com.example.ui.KynaroViewModel
 import com.example.ui.screens.MainTrainingScreen
 import com.example.ui.screens.OnboardingScreen
+import com.example.ui.screens.PaywallScreen
 import com.example.ui.screens.PreparationFlowScreen
 import com.example.ui.screens.WelcomeScreen
 import com.example.ui.screens.WorkoutScreen
@@ -47,6 +48,7 @@ fun KynaroAppRoot(viewModel: KynaroViewModel = viewModel()) {
     val workoutSessions by viewModel.workoutSessions.collectAsStateWithLifecycle()
     val completedDays by viewModel.completedCampDays.collectAsStateWithLifecycle()
     val activeWorkout by viewModel.activeWorkout.collectAsStateWithLifecycle()
+    val activePlan by viewModel.activePlan.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = currentScreen,
@@ -82,7 +84,20 @@ fun KynaroAppRoot(viewModel: KynaroViewModel = viewModel()) {
                     onUpdateAnswers = { viewModel.updateOnboardingAnswers(it) },
                     onBackToOnboarding = { viewModel.navigateTo(AppScreenDestination.ONBOARDING) },
                     onCompleteCampSetup = { finalAnswers ->
-                        viewModel.completePreparationAndUnlockCamp(finalAnswers)
+                        viewModel.completePreparationToPaywall(finalAnswers)
+                    }
+                )
+            }
+            AppScreenDestination.PAYWALL -> {
+                PaywallScreen(
+                    answers = answers,
+                    onBack = { viewModel.navigateTo(AppScreenDestination.PREPARATION) },
+                    onStartSubscription = { chosenPlan ->
+                        viewModel.selectSubscriptionPlan(chosenPlan)
+                        viewModel.completePreparationAndUnlockCamp(answers.copy(onboardingCompleted = true, campUnlocked = true))
+                    },
+                    onRestorePurchases = {
+                        viewModel.completePreparationAndUnlockCamp(answers.copy(onboardingCompleted = true, campUnlocked = true))
                     }
                 )
             }
@@ -94,6 +109,8 @@ fun KynaroAppRoot(viewModel: KynaroViewModel = viewModel()) {
                     completedCampDays = completedDays,
                     onStartMission = { mission -> viewModel.startMissionWorkout(mission) },
                     onStartDrill = { drill -> viewModel.startDrillWorkout(drill) },
+                    activePlan = activePlan,
+                    onOpenPaywall = { viewModel.navigateTo(AppScreenDestination.PAYWALL) },
                     onRetakeOnboarding = { viewModel.navigateTo(AppScreenDestination.ONBOARDING) },
                     onUpdateAnswers = { viewModel.updateOnboardingAnswers(it) }
                 )

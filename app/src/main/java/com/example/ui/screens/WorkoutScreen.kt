@@ -252,6 +252,7 @@ fun WorkoutScreen(
                                     pose = step.pose,
                                     speed = selectedSpeed,
                                     isPaused = isPaused,
+                                    isSouthpaw = answers.strongHand == "Left-handed",
                                     showAnatomicalHighlights = true,
                                     punchTriggerCount = punchTriggerCount,
                                     modifier = Modifier.fillMaxSize()

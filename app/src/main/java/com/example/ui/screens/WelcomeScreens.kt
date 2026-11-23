@@ -1,15 +1,8 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.TrackChanges
@@ -44,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -62,7 +56,7 @@ import com.example.ui.theme.KynaroBlack
 import com.example.ui.theme.KynaroCardBg
 import com.example.ui.theme.KynaroCardBorder
 import com.example.ui.theme.KynaroGreen
-import com.example.ui.theme.KynaroRed
+import com.example.ui.theme.KynaroOrange
 import com.example.ui.theme.KynaroTextSecondary
 import com.example.ui.theme.KynaroTextWhite
 import com.example.ui.theme.SpaceGroteskFontFamily
@@ -74,6 +68,7 @@ fun WelcomeScreen(
 ) {
     var selectedLanguage by remember { mutableStateOf("English") }
     var languageMenuExpanded by remember { mutableStateOf(false) }
+
     KynaroScreenBackground {
         Column(
             modifier = Modifier
@@ -82,13 +77,12 @@ fun WelcomeScreen(
                 .padding(horizontal = 24.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            // Top Row: Official KYNARO Icon + Brand Mark & Language Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                KynaroBrandMark(iconSize = 34.dp, fontSizeSp = 22)
+                KynaroBrandMark(iconSize = 32.dp, fontSizeSp = 22)
 
                 Box {
                     Row(
@@ -103,7 +97,7 @@ fun WelcomeScreen(
                     ) {
                         Text(
                             text = selectedLanguage,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                             color = KynaroTextSecondary
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -131,37 +125,44 @@ fun WelcomeScreen(
                 }
             }
 
-            // Prominent Interactive 3D Coach Character (Original Guard Stance)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Interactive Full-Body 3D Articulated Coach Stage (Live 1-2 Combo Demo)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(310.dp),
+                    .height(320.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(
+                        Brush.radialGradient(listOf(Color(0xFF1E150E), KynaroBlack))
+                    )
+                    .border(1.dp, KynaroCardBorder, RoundedCornerShape(24.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 CoachCharacter3DView(
-                    pose = CoachPose.IDLE_GUARD,
-                    showAnatomicalHighlights = false,
+                    pose = CoachPose.ONE_TWO_COMBO,
+                    showAnatomicalHighlights = true,
                     allowCameraOrbit = true,
+                    showInteractiveHint = true,
                     modifier = Modifier.fillMaxSize()
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // KYNARO AI COACH Pill Badge
             Row(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(Color(0xFF161307))
-                    .border(1.dp, KynaroRed.copy(alpha = 0.45f), CircleShape)
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .background(Color(0xFF1A120A))
+                    .border(1.dp, KynaroOrange.copy(alpha = 0.45f), CircleShape)
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.Bolt,
                     contentDescription = null,
-                    tint = KynaroRed,
-                    modifier = Modifier.size(15.dp)
+                    tint = KynaroOrange,
+                    modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -169,68 +170,63 @@ fun WelcomeScreen(
                         withStyle(SpanStyle(color = KynaroTextWhite, fontWeight = FontWeight.Bold)) {
                             append("KYNARO ")
                         }
-                        withStyle(SpanStyle(color = KynaroRed, fontWeight = FontWeight.Bold)) {
-                            append("AI COACH")
+                        withStyle(SpanStyle(color = KynaroOrange, fontWeight = FontWeight.Bold)) {
+                            append("COACH")
                         }
                     },
                     fontFamily = SpaceGroteskFontFamily,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     letterSpacing = 1.1.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Main Headline
             Text(
-                text = "Your coach can\nsee you punch.",
+                text = "START YOUR\nBOXING JOURNEY.",
                 style = MaterialTheme.typography.displaySmall,
-                fontSize = 36.sp,
-                lineHeight = 40.sp,
+                fontSize = 34.sp,
+                lineHeight = 38.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = KynaroTextWhite
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 3 Feature Rows — Minimalist Championship Gold, Emerald & Stark White
+            WelcomeFeatureRow(
+                icon = Icons.Default.AccessibilityNew,
+                iconTint = KynaroOrange,
+                iconBoxBg = Color(0xFF1A120A),
+                iconBoxBorder = KynaroOrange.copy(alpha = 0.45f),
+                label = "Real-action animated boxing coach"
+            )
+            Spacer(modifier = Modifier.height(10.dp))
             WelcomeFeatureRow(
                 icon = Icons.Default.SportsMma,
-                iconTint = KynaroRed,
-                iconBoxBg = Color(0xFF171407),
-                iconBoxBorder = KynaroRed.copy(alpha = 0.45f),
-                label = "START YOUR BOXING JOURNEY"
+                iconTint = KynaroGreen,
+                iconBoxBg = Color(0xFF081F17),
+                iconBoxBorder = KynaroGreen.copy(alpha = 0.35f),
+                label = "Punches 1–6, slips, rolls & footwork"
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             WelcomeFeatureRow(
                 icon = Icons.Default.TrackChanges,
-                iconTint = KynaroGreen,
-                iconBoxBg = Color(0xFF071F17),
-                iconBoxBorder = KynaroGreen.copy(alpha = 0.35f),
-                label = "30-day fight camp"
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            WelcomeFeatureRow(
-                icon = Icons.Default.FitnessCenter,
                 iconTint = KynaroTextWhite,
-                iconBoxBg = Color(0xFF14161E),
+                iconBoxBg = Color(0xFF141722),
                 iconBoxBorder = KynaroCardBorder,
-                label = "A 3D coach on every drill"
+                label = "Structured 30-day boxing camp"
             )
 
-            Spacer(modifier = Modifier.weight(1f, fill = false))
             Spacer(modifier = Modifier.height(22.dp))
 
-            // Primary GET STARTED Button (Championship Gold with Jet Black text)
             KynaroPrimaryButton(
                 text = "GET STARTED",
                 onClick = onStartOnboarding,
                 testTag = "get_started_button"
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Sign in row
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
@@ -238,10 +234,10 @@ fun WelcomeScreen(
                 Text(
                     text = buildAnnotatedString {
                         withStyle(SpanStyle(color = KynaroTextSecondary)) {
-                            append("Have a camp? ")
+                            append("Already training? ")
                         }
-                        withStyle(SpanStyle(color = KynaroRed, fontWeight = FontWeight.Bold)) {
-                            append("Sign in")
+                        withStyle(SpanStyle(color = KynaroOrange, fontWeight = FontWeight.Bold)) {
+                            append("Enter Camp")
                         }
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -270,7 +266,7 @@ private fun WelcomeFeatureRow(
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(42.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(iconBoxBg)
                 .border(1.dp, iconBoxBorder, RoundedCornerShape(12.dp)),
@@ -280,19 +276,17 @@ private fun WelcomeFeatureRow(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.titleMedium,
             fontSize = 15.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = KynaroTextWhite,
-            maxLines = 1,
-            softWrap = false
+            maxLines = 1
         )
     }
 }

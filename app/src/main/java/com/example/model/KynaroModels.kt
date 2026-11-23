@@ -70,6 +70,41 @@ enum class CoachPose(
         cameraYaw = 5f,
         cameraPitch = 5f
     ),
+    REAR_HOOK(
+        title = "REAR HOOK",
+        subtitle = "90° COMPACT POWER ARC",
+        cueText = "Rotate the rear hip completely across center while keeping a tight 90-degree elbow.",
+        cameraYaw = 10f,
+        cameraPitch = 1f
+    ),
+    LEAD_UPPERCUT(
+        title = "LEAD UPPERCUT",
+        subtitle = "DIP & DRIVE VERTICAL",
+        cueText = "Dip knees to lead side and drive your lead orange fist vertically through center.",
+        cameraYaw = -10f,
+        cameraPitch = -2f
+    ),
+    HIGH_GUARD_SHELL(
+        title = "HIGH GUARD SHELL",
+        subtitle = "FORTRESS DEFENSE",
+        cueText = "Press both gloves tightly against your forehead and clamp elbows to your ribs.",
+        cameraYaw = 0f,
+        cameraPitch = 0f
+    ),
+    PULL_COUNTER(
+        title = "PULL COUNTER",
+        subtitle = "EVADE & FIRE CROSS",
+        cueText = "Rock weight back 2 inches onto your rear leg, then spring forward with a laser cross.",
+        cameraYaw = 8f,
+        cameraPitch = 2f
+    ),
+    CHECK_HOOK_PIVOT(
+        title = "90° CHECK HOOK PIVOT",
+        subtitle = "PIVOT & EXIT ANGLE",
+        cueText = "Plant the lead ball of foot, swing rear leg 90 degrees, and whip a crisp check hook.",
+        cameraYaw = -12f,
+        cameraPitch = 2f
+    ),
     VICTORY_RAISE(
         title = "CAMP CHAMPION",
         subtitle = "ROUND COMPLETE",

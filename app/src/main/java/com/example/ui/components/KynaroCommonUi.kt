@@ -66,6 +66,8 @@ import com.example.ui.theme.KynaroCardBg
 import com.example.ui.theme.KynaroCardBorder
 import com.example.ui.theme.KynaroCardElevated
 import com.example.ui.theme.KynaroDeepBurgundy
+import com.example.ui.theme.KynaroOrange
+import com.example.ui.theme.KynaroOrangeDark
 import com.example.ui.theme.KynaroRed
 import com.example.ui.theme.KynaroTextMuted
 import com.example.ui.theme.KynaroTextSecondary
@@ -86,30 +88,29 @@ fun KynaroScreenBackground(
             .background(KynaroBlack)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Minimalist architectural Obsidian & Championship Gold top spotlight
             drawRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         topGlowColor,
-                        Color(0xFF0A0A0D),
+                        Color(0xFF0A0B0F),
                         KynaroBlack,
                         KynaroBlack
                     ),
                     startY = 0f,
-                    endY = size.height * 0.60f
+                    endY = size.height * 0.55f
                 )
             )
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        KynaroRed.copy(alpha = 0.085f),
+                        KynaroOrange.copy(alpha = 0.09f),
                         Color.Transparent
                     ),
-                    center = Offset(size.width * 0.5f, size.height * 0.14f),
-                    radius = size.width * 0.78f
+                    center = Offset(size.width * 0.5f, size.height * 0.12f),
+                    radius = size.width * 0.80f
                 ),
-                radius = size.width * 0.78f,
-                center = Offset(size.width * 0.5f, size.height * 0.14f)
+                radius = size.width * 0.80f,
+                center = Offset(size.width * 0.5f, size.height * 0.12f)
             )
         }
         Box(
@@ -134,7 +135,7 @@ fun KynaroBrandMark(
             modifier = Modifier
                 .size(iconSize)
                 .clip(RoundedCornerShape(9.dp))
-                .border(1.dp, KynaroRed.copy(alpha = 0.6f), RoundedCornerShape(9.dp))
+                .border(1.dp, KynaroOrange.copy(alpha = 0.65f), RoundedCornerShape(9.dp))
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
@@ -142,7 +143,7 @@ fun KynaroBrandMark(
                 withStyle(SpanStyle(color = KynaroTextWhite, fontWeight = FontWeight.ExtraBold)) {
                     append("KYN")
                 }
-                withStyle(SpanStyle(color = KynaroRed, fontWeight = FontWeight.ExtraBold)) {
+                withStyle(SpanStyle(color = KynaroOrange, fontWeight = FontWeight.ExtraBold)) {
                     append("ARO")
                 }
             },
@@ -159,7 +160,7 @@ fun KynaroPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    containerColor: Color = KynaroRed,
+    containerColor: Color = KynaroOrange,
     contentColor: Color = KynaroBlack,
     leadingIcon: (@Composable () -> Unit)? = null,
     testTag: String = "primary_action_button"
@@ -171,30 +172,35 @@ fun KynaroPrimaryButton(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "btn_scale"
     )
-    val bgColor by animateColorAsState(
-        targetValue = if (enabled) containerColor else Color(0xFF181920),
-        animationSpec = tween(200),
-        label = "btn_bg"
-    )
     val txtColor by animateColorAsState(
         targetValue = if (enabled) contentColor else KynaroTextMuted,
         animationSpec = tween(200),
         label = "btn_txt"
     )
 
+    val bgModifier = if (enabled) {
+        Modifier.background(
+            Brush.horizontalGradient(
+                colors = listOf(containerColor, KynaroYellow.copy(alpha = 0.92f))
+            )
+        )
+    } else {
+        Modifier.background(Color(0xFF181A22))
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(56.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .clip(RoundedCornerShape(16.dp))
-            .background(bgColor)
+            .then(bgModifier)
             .border(
                 width = if (enabled) 1.dp else 0.dp,
-                color = if (enabled) Color.White.copy(alpha = 0.18f) else Color.Transparent,
+                color = if (enabled) Color.White.copy(alpha = 0.22f) else Color.Transparent,
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(
@@ -219,7 +225,7 @@ fun KynaroPrimaryButton(
                     text = text.uppercase(),
                     fontFamily = SpaceGroteskFontFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     letterSpacing = 1.4.sp,
                     color = txtColor
                 )
@@ -237,55 +243,85 @@ fun OnboardingProgressHeader(
 ) {
     val animatedProgress by animateFloatAsState(
         targetValue = (currentStep.toFloat() / totalSteps.toFloat()).coerceIn(0.05f, 1f),
-        animationSpec = tween(durationMillis = 350),
+        animationSpec = tween(durationMillis = 320),
         label = "onboarding_progress"
     )
+    val sectionTitle = when {
+        currentStep <= 5 -> "YOUR GOAL"
+        currentStep <= 9 -> "ATHLETE PROFILE"
+        currentStep <= 13 -> "GEAR & HABITS"
+        else -> "COACH STYLE"
+    }
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("onboarding_back_button")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = "Back",
-                tint = KynaroTextSecondary,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(6.dp)
-                .padding(horizontal = 8.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF181A22))
-        ) {
-            Box(
+            IconButton(
+                onClick = onBack,
                 modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(KynaroRed)
-            )
-        }
+                    .minimumInteractiveComponentSize()
+                    .testTag("onboarding_back_button")
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "Back",
+                    tint = KynaroTextWhite,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
 
-        Text(
-            text = String.format("%02d/%02d", currentStep, totalSteps),
-            fontFamily = SpaceGroteskFontFamily,
-            fontWeight = FontWeight.Medium,
-            fontSize = 13.sp,
-            color = KynaroTextMuted,
-            modifier = Modifier.padding(start = 6.dp, end = 8.dp)
-        )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = sectionTitle,
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.4.sp,
+                        color = KynaroOrange
+                    )
+                    Text(
+                        text = String.format("%02d / %02d", currentStep, totalSteps),
+                        fontFamily = SpaceGroteskFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        color = KynaroTextMuted
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1B1E28))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(animatedProgress)
+                            .height(5.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.horizontalGradient(listOf(KynaroOrange, KynaroYellow))
+                            )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+        }
     }
 }
 
@@ -301,12 +337,12 @@ fun SelectableOptionCard(
     testTag: String = "option_card_$title"
 ) {
     val borderColor by animateColorAsState(
-        targetValue = if (selected) KynaroRed else KynaroCardBorder,
+        targetValue = if (selected) KynaroOrange else KynaroCardBorder,
         animationSpec = tween(180),
         label = "card_border"
     )
     val bgColor by animateColorAsState(
-        targetValue = if (selected) Color(0xFF17150A) else KynaroCardBg,
+        targetValue = if (selected) Color(0xFF1A130B) else KynaroCardBg,
         animationSpec = tween(180),
         label = "card_bg"
     )
@@ -326,12 +362,12 @@ fun SelectableOptionCard(
             .clip(RoundedCornerShape(18.dp))
             .background(bgColor)
             .border(
-                width = if (selected) 1.8.dp else 1.dp,
+                width = if (selected) 1.6.dp else 1.dp,
                 color = borderColor,
                 shape = RoundedCornerShape(18.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 18.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -340,7 +376,12 @@ fun SelectableOptionCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (selected) KynaroRed.copy(alpha = 0.18f) else KynaroCardElevated),
+                    .background(if (selected) KynaroOrange.copy(alpha = 0.18f) else KynaroCardElevated)
+                    .border(
+                        1.dp,
+                        if (selected) KynaroOrange.copy(alpha = 0.4f) else Color.Transparent,
+                        RoundedCornerShape(12.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (customIconContent != null) {
@@ -349,12 +390,12 @@ fun SelectableOptionCard(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (selected) KynaroRed else KynaroTextSecondary,
+                        tint = if (selected) KynaroOrange else KynaroTextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
         }
 
         Column(modifier = Modifier.weight(1f)) {
@@ -362,14 +403,14 @@ fun SelectableOptionCard(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 color = KynaroTextWhite
             )
             if (!subtitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = KynaroTextSecondary
                 )
             }
@@ -381,10 +422,10 @@ fun SelectableOptionCard(
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(if (selected) KynaroRed else Color.Transparent)
+                .background(if (selected) KynaroOrange else Color.Transparent)
                 .border(
                     width = 1.8.dp,
-                    color = if (selected) KynaroRed else Color(0xFF333645),
+                    color = if (selected) KynaroOrange else Color(0xFF34394A),
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -405,23 +446,23 @@ fun SelectableOptionCard(
 fun KynaroPillBadge(
     text: String,
     modifier: Modifier = Modifier,
-    borderColor: Color = KynaroRed.copy(alpha = 0.50f),
-    textColor: Color = KynaroRed,
-    backgroundColor: Color = Color(0xFF171407)
+    borderColor: Color = KynaroOrange.copy(alpha = 0.48f),
+    textColor: Color = KynaroOrange,
+    backgroundColor: Color = Color(0xFF1A120A)
 ) {
     Box(
         modifier = modifier
             .clip(CircleShape)
             .background(backgroundColor)
             .border(1.dp, borderColor, CircleShape)
-            .padding(horizontal = 16.dp, vertical = 7.dp)
+            .padding(horizontal = 12.dp, vertical = 5.dp)
     ) {
         Text(
             text = text.uppercase(),
             fontFamily = SpaceGroteskFontFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            letterSpacing = 1.4.sp,
+            fontSize = 10.sp,
+            letterSpacing = 1.2.sp,
             color = textColor
         )
     }

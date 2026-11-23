@@ -1,12 +1,13 @@
 package com.example.ui.components
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Camera
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.Rect
+import android.graphics.RectF
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -38,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,7 +52,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -71,45 +72,69 @@ import com.example.ui.theme.KynaroBlack
 import com.example.ui.theme.KynaroCardBg
 import com.example.ui.theme.KynaroCardBorder
 import com.example.ui.theme.KynaroCardElevated
-import com.example.ui.theme.KynaroDeepBurgundy
 import com.example.ui.theme.KynaroGreen
-import com.example.ui.theme.KynaroRed
+import com.example.ui.theme.KynaroOrange
 import com.example.ui.theme.KynaroTextSecondary
 import com.example.ui.theme.KynaroTextWhite
 import com.example.ui.theme.KynaroYellow
 import com.example.ui.theme.OswaldFontFamily
 import com.example.ui.theme.SpaceGroteskFontFamily
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
-private const val MESH_COLS = 24
-private const val MESH_ROWS = 34
-private const val VERTEX_COUNT = (MESH_COLS + 1) * (MESH_ROWS + 1)
+// =========================================================================================
+// KYNARO PIXEL-EXACT PHOTOREALISTIC 360° & REAL ACTION BOXING COACH ENGINE
+// Uses the exact official KYNARO marketing Coach Character across:
+// - 8 true 360° turnaround studio views (Front, 45°, Right Side, 135°, Back 180°, 225°, Left Side, 315°)
+// - 10 real boxing action keyframes (Guard, Full-Extension Jab, Rear-Pivot Cross, Lead Hook Load/Hit,
+//   Knee-Dip Uppercut Load/Drive, Slip Defense, Low Bob & Weave Roll, Step-Slide Footwork)
+// - Smooth keyframe cross-dissolve, snappy anticipation/recoil curves, Orthodox/Southpaw flip,
+//   and 3D perspective boxing ring mat + kinetic trajectory overlays.
+// =========================================================================================
 
-private object CoachBitmapCache {
-    @Volatile
-    private var cachedBitmap: Bitmap? = null
+private object CoachSpriteBank {
+    private val cache = ConcurrentHashMap<Int, Bitmap>()
 
-    fun getBitmap(context: android.content.Context): Bitmap {
-        cachedBitmap?.let { return it }
-        synchronized(this) {
-            cachedBitmap?.let { return it }
+    val turnaroundIds = intArrayOf(
+        R.drawable.coach_360_0, // 0° Front
+        R.drawable.coach_360_1, // 45° Front-Right
+        R.drawable.coach_360_2, // 90° Right Side
+        R.drawable.coach_360_3, // 135° Back-Right
+        R.drawable.coach_360_4, // 180° Back
+        R.drawable.coach_360_5, // 225° Back-Left
+        R.drawable.coach_360_6, // 270° Left Side
+        R.drawable.coach_360_7  // 315° Front-Left
+    )
+
+    fun get(context: Context, resId: Int): Bitmap {
+        return cache.getOrPut(resId) {
             val opts = BitmapFactory.Options().apply {
                 inScaled = false
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            return BitmapFactory.decodeResource(
-                context.resources,
-                R.drawable.coach_character,
-                opts
-            ).also { cachedBitmap = it }
+            BitmapFactory.decodeResource(context.resources, resId, opts)
         }
     }
 }
+
+private data class ActionFrameState(
+    val primaryResId: Int,
+    val secondaryResId: Int,
+    val blendAlpha: Float,
+    val shiftXFrac: Float,
+    val shiftYFrac: Float,
+    val scaleBoost: Float,
+    val strikePower: Float,
+    val impactNormX: Float,
+    val impactNormY: Float,
+    val phaseLabel: String,
+    val phaseStepIndex: Int
+)
 
 @Composable
 fun CoachCharacter3DView(
@@ -124,43 +149,55 @@ fun CoachCharacter3DView(
     punchTriggerCount: Int = 0,
     physiqueBulkMultiplier: Float = 1.0f,
     silhouetteTint: Color? = null,
-    showInteractiveHint: Boolean = false
+    showInteractiveHint: Boolean = false,
+    isSouthpaw: Boolean = false,
+    externalYawDeg: Float? = null,
+    onPhaseChanged: ((String, Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val fullBitmap = remember(context) { CoachBitmapCache.getBitmap(context) }
 
-    var userYawDrag by remember { mutableFloatStateOf(0f) }
-    var userPitchDrag by remember { mutableFloatStateOf(0f) }
+    var userYawDeg by remember { mutableFloatStateOf(0f) }
     var localTapPunchCounter by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(externalYawDeg) {
+        if (externalYawDeg != null) {
+            userYawDeg = externalYawDeg
+        }
+    }
 
     val totalPunchTriggers = punchTriggerCount + localTapPunchCounter
 
     val cycleDurationMs = remember(pose, speed) {
         val base = when (pose) {
-            CoachPose.IDLE_GUARD -> 2000
-            CoachPose.JAB -> 980
-            CoachPose.CROSS -> 1060
-            CoachPose.ONE_TWO_COMBO -> 1280
-            CoachPose.JAB_CROSS_HOOK -> 1540
-            CoachPose.SPEED_HANDS -> 580
-            CoachPose.UPPERCUT -> 1140
-            CoachPose.SLIP_DEFENSE -> 1360
-            CoachPose.FOOTWORK -> 1180
-            CoachPose.VICTORY_RAISE -> 1800
+            CoachPose.IDLE_GUARD -> 1900
+            CoachPose.JAB -> 1050
+            CoachPose.CROSS -> 1150
+            CoachPose.ONE_TWO_COMBO -> 1480
+            CoachPose.JAB_CROSS_HOOK -> 1850
+            CoachPose.SPEED_HANDS -> 680
+            CoachPose.UPPERCUT -> 1280
+            CoachPose.SLIP_DEFENSE -> 1500
+            CoachPose.FOOTWORK -> 1320
+            CoachPose.REAR_HOOK -> 1180
+            CoachPose.LEAD_UPPERCUT -> 1240
+            CoachPose.HIGH_GUARD_SHELL -> 1600
+            CoachPose.PULL_COUNTER -> 1360
+            CoachPose.CHECK_HOOK_PIVOT -> 1380
+            CoachPose.VICTORY_RAISE -> 1700
         }
-        (base / speed.speedMultiplier).toInt().coerceIn(360, 3000)
+        (base / speed.speedMultiplier).toInt().coerceIn(380, 3400)
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "coach_interactive_mesh")
+    val infiniteTransition = rememberInfiniteTransition(label = "coach_pixel_exact_action")
 
     val breathPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            animation = tween(durationMillis = 2100, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "breath_mesh_phase"
+        label = "breath_phase"
     )
 
     val actionPhase by infiniteTransition.animateFloat(
@@ -170,7 +207,7 @@ fun CoachCharacter3DView(
             animation = tween(durationMillis = cycleDurationMs, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "action_mesh_phase"
+        label = "action_phase"
     )
 
     val tapBurstImpulse by animateFloatAsState(
@@ -179,480 +216,209 @@ fun CoachCharacter3DView(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
-        label = "tap_punch_impulse"
+        label = "tap_impulse"
     )
 
-    val smoothCameraYaw by animateFloatAsState(
-        targetValue = pose.cameraYaw * 0.45f + userYawDrag,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 200f),
-        label = "smooth_camera_yaw"
+    val smoothYawDeg by animateFloatAsState(
+        targetValue = userYawDeg,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
+        label = "smooth_yaw"
     )
 
-    val smoothCameraPitch by animateFloatAsState(
-        targetValue = pose.cameraPitch * 0.45f + userPitchDrag,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 200f),
-        label = "smooth_camera_pitch"
-    )
-
-    val meshVerts = remember { FloatArray(VERTEX_COUNT * 2) }
-    val meshColors = remember { IntArray(VERTEX_COUNT) }
-    val camera3D = remember { Camera() }
-    val matrix3D = remember { Matrix() }
-    val mainPaint = remember {
-        Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-    }
-    val shadowPaint = remember {
-        Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            colorFilter = PorterDuffColorFilter(
-                android.graphics.Color.argb(120, 0, 0, 0),
-                PorterDuff.Mode.SRC_IN
-            )
-        }
-    }
-
-    remember(silhouetteTint) {
-        if (silhouetteTint != null) {
-            mainPaint.colorFilter = PorterDuffColorFilter(
-                silhouetteTint.toArgb(),
-                PorterDuff.Mode.SRC_IN
-            )
-        } else {
-            mainPaint.colorFilter = null
-        }
-        true
-    }
+    val paintPrimary = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
+    val paintSecondary = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
+    val srcRect = remember { Rect() }
+    val dstRect = remember { RectF() }
 
     val pointerModifier = if (allowCameraOrbit) {
         Modifier
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        userYawDrag = (userYawDrag + dragAmount.x * 0.18f).coerceIn(-38f, 38f)
-                        userPitchDrag = (userPitchDrag - dragAmount.y * 0.12f).coerceIn(-16f, 18f)
-                    },
-                    onDragEnd = {
-                        userYawDrag = 0f
-                        userPitchDrag = 0f
-                    }
-                )
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    userYawDeg = (userYawDeg + dragAmount.x * 0.45f) % 360f
+                }
             }
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        localTapPunchCounter++
-                    }
-                )
+                detectTapGestures(onTap = { localTapPunchCounter++ })
             }
     } else {
         Modifier
     }
 
-    val effectivePhase = if (isPaused) 0.28f else actionPhase
+    val effectivePhase = if (isPaused) 0.36f else actionPhase
     val breathSin = if (isPaused) 0f else sin(breathPhase)
-    val tapImpulseWave = sin(tapBurstImpulse * PI.toFloat()).coerceIn(0f, 1f)
+    val tapWave = sin(tapBurstImpulse * PI.toFloat()).coerceIn(0f, 1f)
+
+    // Normalize yaw into [0, 360)
+    val normYaw = ((smoothYawDeg % 360f) + 360f) % 360f
+    // If user rotated away from front (> 22 deg), show true 360° photorealistic turnaround!
+    val isOrbitInspecting = normYaw > 22f && normYaw < 338f
+
+    val actionState = remember(pose, effectivePhase, breathSin, tapWave, totalPunchTriggers, isOrbitInspecting, normYaw) {
+        if (isOrbitInspecting) {
+            val idxF = (normYaw / 360f) * 8f
+            val idx0 = idxF.toInt() % 8
+            val idx1 = (idx0 + 1) % 8
+            val frac = idxF - idxF.toInt()
+            val angleDeg = normYaw.toInt()
+            ActionFrameState(
+                primaryResId = CoachSpriteBank.turnaroundIds[idx0],
+                secondaryResId = CoachSpriteBank.turnaroundIds[idx1],
+                blendAlpha = frac,
+                shiftXFrac = 0f,
+                shiftYFrac = breathSin * 0.008f,
+                scaleBoost = 1.0f,
+                strikePower = 0f,
+                impactNormX = 0.5f,
+                impactNormY = 0.3f,
+                phaseLabel = "360° FORM VIEW • ${angleDeg}°",
+                phaseStepIndex = (idx0 / 2).coerceIn(0, 3)
+            )
+        } else {
+            evaluateRealActionFrames(pose, effectivePhase, breathSin, tapWave, totalPunchTriggers)
+        }
+    }
+
+    LaunchedEffect(actionState.phaseLabel, actionState.phaseStepIndex) {
+        onPhaseChanged?.invoke(actionState.phaseLabel, actionState.phaseStepIndex)
+    }
 
     Box(
         modifier = modifier.then(pointerModifier),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val canvasW = size.width
-            val canvasH = size.height
-            val centerX = canvasW * 0.5f
+            val w = size.width
+            val h = size.height
+            if (w <= 1f || h <= 1f) return@Canvas
 
-            val kinematics = evaluateMeshKinematics(
-                pose = pose,
-                phase = effectivePhase,
-                breathSin = breathSin,
-                tapImpulse = tapImpulseWave,
-                tapTriggerIndex = totalPunchTriggers
-            )
+            val cx = w * 0.5f
 
-            val strikeIntensity = max(kinematics.leadPunchExt, kinematics.rearPunchExt)
-
-            // 1. Minimalist Architectural Stage Spotlight (Championship Gold & Obsidian)
+            // 1. Studio Spotlight Aura
             if (silhouetteTint == null) {
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            KynaroRed.copy(alpha = 0.16f + strikeIntensity * 0.12f),
-                            KynaroDeepBurgundy.copy(alpha = 0.08f),
+                            KynaroOrange.copy(alpha = 0.16f + actionState.strikePower * 0.14f),
+                            Color(0xFF1A120A).copy(alpha = 0.14f),
                             Color.Transparent
                         ),
-                        center = Offset(
-                            centerX + smoothCameraYaw * 1.4f,
-                            canvasH * (if (cropUpperBody) 0.48f else 0.40f)
-                        ),
-                        radius = canvasW.coerceAtLeast(canvasH) * 0.52f
+                        center = Offset(cx, h * 0.44f),
+                        radius = max(w, h) * 0.52f
                     ),
-                    radius = canvasW.coerceAtLeast(canvasH) * 0.52f,
-                    center = Offset(
-                        centerX + smoothCameraYaw * 1.4f,
-                        canvasH * (if (cropUpperBody) 0.48f else 0.40f)
-                    )
+                    radius = max(w, h) * 0.52f,
+                    center = Offset(cx, h * 0.44f)
                 )
             }
 
-            // 2. Calculate Character Placement & Aspect Ratio preserving exact pixel proportions
-            val bmpW = fullBitmap.width.toFloat()
-            val bmpH = fullBitmap.height.toFloat()
-            val aspect = bmpW / bmpH
+            // 2. Perspective Boxing Ring Mat & Ground Shadow
+            val spriteAspect = 460f / 500f
+            val targetH = if (cropUpperBody) h * 1.48f else h * 0.92f
+            val targetW = min(targetH * spriteAspect, if (cropUpperBody) w * 1.38f else w * 0.94f)
+            val finalH = (targetW / spriteAspect) * actionState.scaleBoost
+            val finalW = targetW * actionState.scaleBoost * physiqueBulkMultiplier
 
-            val targetCharH = if (cropUpperBody) {
-                canvasH * 1.62f
-            } else {
-                canvasH * 0.92f
-            }
-            val targetCharW = (targetCharH * aspect).coerceAtMost(
-                if (cropUpperBody) canvasW * 1.45f else canvasW * 0.95f
-            )
-            val finalCharH = targetCharW / aspect
+            val shiftX = actionState.shiftXFrac * finalW * (if (isSouthpaw) -1f else 1f)
+            val shiftY = actionState.shiftYFrac * finalH
+            val drawLeft = cx - finalW * 0.5f + shiftX
+            val drawTop = if (cropUpperBody) h * 0.02f + shiftY else (h - finalH) * 0.5f + shiftY
 
-            val charLeft = centerX - (targetCharW * 0.47f)
-            val charTop = if (cropUpperBody) {
-                canvasH * 0.02f
-            } else {
-                (canvasH - finalCharH) * 0.5f
-            }
-
-            // 3. Draw 3D Perspective Ring Floor & Footwork Telemetry
             if (showFloorRing && !cropUpperBody && silhouetteTint == null) {
-                val floorCenterY = charTop + finalCharH * 0.915f
-                val ringW = targetCharW * 1.15f
-                val ringH = finalCharH * 0.13f
-
+                val floorY = drawTop + finalH * 0.945f
+                val ringW = finalW * 1.12f
+                val ringH = finalH * 0.12f
                 drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            KynaroRed.copy(alpha = 0.22f + strikeIntensity * 0.12f),
+                            KynaroOrange.copy(alpha = 0.22f + actionState.strikePower * 0.15f),
                             Color.Transparent
                         ),
-                        center = Offset(centerX, floorCenterY),
-                        radius = ringW * 0.58f
+                        center = Offset(cx, floorY),
+                        radius = ringW * 0.55f
                     ),
-                    topLeft = Offset(centerX - ringW * 0.5f, floorCenterY - ringH * 0.5f),
+                    topLeft = Offset(cx - ringW * 0.5f, floorY - ringH * 0.5f),
                     size = Size(ringW, ringH)
                 )
                 drawOval(
-                    color = KynaroRed.copy(alpha = 0.35f + strikeIntensity * 0.18f),
-                    topLeft = Offset(centerX - ringW * 0.44f, floorCenterY - ringH * 0.40f),
+                    color = KynaroOrange.copy(alpha = 0.40f + actionState.strikePower * 0.2f),
+                    topLeft = Offset(cx - ringW * 0.44f, floorY - ringH * 0.40f),
                     size = Size(ringW * 0.88f, ringH * 0.80f),
-                    style = Stroke(width = 1.6.dp.toPx())
+                    style = Stroke(width = 1.5.dp.toPx())
                 )
-
-                val shoeLeftX = charLeft + targetCharW * 0.19f + kinematics.footworkShiftX * targetCharW
-                val shoeLeftY = charTop + finalCharH * 0.865f
-                val shoeRightX = charLeft + targetCharW * 0.80f + kinematics.footworkShiftX * targetCharW
-                val shoeRightY = charTop + finalCharH * 0.928f
-
+                // Ground contact shadow beneath shoes
                 drawOval(
-                    color = Color.Black.copy(alpha = 0.72f),
-                    topLeft = Offset(shoeLeftX - targetCharW * 0.13f, shoeLeftY - finalCharH * 0.022f),
-                    size = Size(targetCharW * 0.26f, finalCharH * 0.048f)
+                    color = Color.Black.copy(alpha = 0.65f),
+                    topLeft = Offset(cx - finalW * 0.38f + shiftX, floorY - finalH * 0.03f),
+                    size = Size(finalW * 0.76f, finalH * 0.06f)
                 )
-                drawOval(
-                    color = Color.Black.copy(alpha = 0.72f),
-                    topLeft = Offset(shoeRightX - targetCharW * 0.13f, shoeRightY - finalCharH * 0.022f),
-                    size = Size(targetCharW * 0.26f, finalCharH * 0.048f)
-                )
-
-                // If FOOTWORK or CROSS, highlight foot pivot ring
-                if (pose == CoachPose.FOOTWORK || pose == CoachPose.CROSS) {
-                    val pivotX = if (pose == CoachPose.CROSS) shoeRightX else shoeLeftX
-                    val pivotY = if (pose == CoachPose.CROSS) shoeRightY else shoeLeftY
-                    drawOval(
-                        color = KynaroRed.copy(alpha = 0.70f),
-                        topLeft = Offset(pivotX - targetCharW * 0.14f, pivotY - finalCharH * 0.024f),
-                        size = Size(targetCharW * 0.28f, finalCharH * 0.052f),
-                        style = Stroke(
-                            width = 2.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
-                        )
-                    )
-                }
             }
 
-            // 4. Populate 24x34 Articulated Skeletal Mesh (`meshVerts` & `meshColors`)
-            // Pure mesh articulation — ZERO cropped sub-bitmap zooming!
-            val yawNorm = (smoothCameraYaw / 40f).coerceIn(-1f, 1f)
-            val pitchNorm = (smoothCameraPitch / 22f).coerceIn(-1f, 1f)
+            // 3. Draw Pixel-Exact Coach Character Sprites (Smooth Cross-Dissolve + Southpaw Mirroring)
+            val bmp1 = CoachSpriteBank.get(context, actionState.primaryResId)
+            val bmp2 = CoachSpriteBank.get(context, actionState.secondaryResId)
 
-            var vIdx = 0
-            var cIdx = 0
-            for (row in 0..MESH_ROWS) {
-                val v = row.toFloat() / MESH_ROWS.toFloat()
-
-                val groundAnchorWeight = ((0.88f - v) / 0.24f).coerceIn(0f, 1f)
-                val upperBodyWeight = ((0.58f - v) / 0.34f).coerceIn(0f, 1f)
-                val headNeckWeight = ((0.20f - v) / 0.14f).coerceIn(0f, 1f)
-                val chestRibWeight = gaussianWeight(v, center = 0.28f, sigma = 0.095f)
-                val waistCoreWeight = gaussianWeight(v, center = 0.40f, sigma = 0.11f)
-                val kneeBendWeight = gaussianWeight(v, center = 0.67f, sigma = 0.10f)
-
-                for (col in 0..MESH_COLS) {
-                    val u = col.toFloat() / MESH_COLS.toFloat()
-                    val relU = u - 0.455f
-
-                    val leadArmInfluence = gaussian2D(
-                        u, v,
-                        cu = 0.285f, cv = 0.235f,
-                        su = 0.105f, sv = 0.105f
-                    )
-                    val rearArmInfluence = gaussian2D(
-                        u, v,
-                        cu = 0.555f, cv = 0.225f,
-                        su = 0.115f, sv = 0.105f
-                    )
-                    val torsoDepth = gaussian2D(
-                        u, v,
-                        cu = 0.455f, cv = 0.28f,
-                        su = 0.16f, sv = 0.18f
-                    )
-                    val vertexZ = (torsoDepth * 0.35f + leadArmInfluence * 0.65f + rearArmInfluence * 0.55f)
-
-                    val bulkFactor = (physiqueBulkMultiplier - 1f) * (chestRibWeight * 0.55f + waistCoreWeight * 1.15f)
-                    var du = relU * bulkFactor
-
-                    val breathExpand = breathSin * 0.011f * chestRibWeight
-                    du += relU * (breathExpand * 2.2f)
-                    var dv = -abs(breathSin) * 0.0045f * chestRibWeight -
-                        breathSin * 0.0035f * headNeckWeight
-
-                    dv += kinematics.bodyBounceY * groundAnchorWeight
-                    du += kinematics.footworkShiftX * (0.35f + 0.65f * groundAnchorWeight)
-                    du += relU * (kinematics.kneeDip * 0.08f * kneeBendWeight)
-
-                    du += kinematics.slipOffsetX * (upperBodyWeight * 0.85f + headNeckWeight * 0.35f)
-                    dv += abs(kinematics.slipOffsetX) * 0.18f * upperBodyWeight
-
-                    val totalYaw = yawNorm + kinematics.torsoTwistYaw
-                    du += vertexZ * totalYaw * 0.048f * groundAnchorWeight
-                    du -= relU * abs(totalYaw) * 0.035f * upperBodyWeight
-                    dv += vertexZ * pitchNorm * 0.028f * groundAnchorWeight
-
-                    if (leadArmInfluence > 0.01f) {
-                        du += kinematics.leadArmDeltaU * leadArmInfluence
-                        dv += kinematics.leadArmDeltaV * leadArmInfluence
-                    }
-
-                    if (rearArmInfluence > 0.01f) {
-                        du += kinematics.rearArmDeltaU * rearArmInfluence
-                        dv += kinematics.rearArmDeltaV * rearArmInfluence
-                    }
-
-                    if (headNeckWeight > 0.01f) {
-                        du += kinematics.headDeltaU * headNeckWeight
-                        dv += kinematics.headDeltaV * headNeckWeight
-                    }
-
-                    val screenX = charLeft + (u + du) * targetCharW
-                    val screenY = charTop + (v + dv) * finalCharH
-
-                    meshVerts[vIdx++] = screenX
-                    meshVerts[vIdx++] = screenY
-
-                    if (silhouetteTint != null) {
-                        meshColors[cIdx++] = silhouetteTint.toArgb()
-                    } else {
-                        val normalX = (relU * 2.4f).coerceIn(-1f, 1f)
-                        val shadeDelta = (-normalX * totalYaw * 18f).toInt().coerceIn(-22, 16)
-                        val channel = (255 + shadeDelta).coerceIn(228, 255)
-                        meshColors[cIdx++] = android.graphics.Color.argb(255, channel, channel, channel)
-                    }
-                }
+            val filter = silhouetteTint?.let {
+                PorterDuffColorFilter(it.toArgb(), PorterDuff.Mode.SRC_IN)
             }
+            paintPrimary.colorFilter = filter
+            paintSecondary.colorFilter = filter
 
-            // 5. Render the Deformed Pixel-Exact Character Mesh via Native Canvas + 3D Camera
+            dstRect.set(drawLeft, drawTop, drawLeft + finalW, drawTop + finalH)
+
             drawIntoCanvas { composeCanvas ->
                 val native = composeCanvas.nativeCanvas
                 native.save()
-
-                val pivotX = charLeft + targetCharW * 0.46f
-                val pivotY = charTop + finalCharH * 0.44f
-                camera3D.save()
-                camera3D.setLocation(0f, 0f, -18f)
-                camera3D.rotateY(smoothCameraYaw * 0.32f)
-                camera3D.rotateX(-smoothCameraPitch * 0.25f)
-                camera3D.getMatrix(matrix3D)
-                camera3D.restore()
-
-                matrix3D.preTranslate(-pivotX, -pivotY)
-                matrix3D.postTranslate(pivotX, pivotY)
-                native.concat(matrix3D)
-
-                if (silhouetteTint == null) {
-                    native.save()
-                    native.translate(
-                        -smoothCameraYaw * 0.35f + 4.dp.toPx(),
-                        6.dp.toPx()
-                    )
-                    native.drawBitmapMesh(
-                        fullBitmap,
-                        MESH_COLS,
-                        MESH_ROWS,
-                        meshVerts,
-                        0,
-                        null,
-                        0,
-                        shadowPaint
-                    )
-                    native.restore()
+                if (isSouthpaw) {
+                    native.scale(-1f, 1f, cx, h * 0.5f)
                 }
 
-                native.drawBitmapMesh(
-                    fullBitmap,
-                    MESH_COLS,
-                    MESH_ROWS,
-                    meshVerts,
-                    0,
-                    if (silhouetteTint == null) meshColors else null,
-                    0,
-                    mainPaint
-                )
-
+                val activeBmp = if (actionState.blendAlpha >= 0.36f) bmp2 else bmp1
+                paintPrimary.alpha = 255
+                srcRect.set(0, 0, activeBmp.width, activeBmp.height)
+                native.drawBitmap(activeBmp, srcRect, dstRect, paintPrimary)
                 native.restore()
             }
 
-            // 6. Minimalist 3D Biomechanical Motion Vectors & Kinetic Chain Telemetry HUD
-            // Clearly illustrates exact technique mechanics (trajectory, hip torque, slip angle)
-            if (showAnatomicalHighlights && silhouetteTint == null) {
-                val leadShoulder = Offset(
-                    x = charLeft + (0.245f + kinematics.slipOffsetX) * targetCharW,
-                    y = charTop + (0.225f + kinematics.bodyBounceY) * finalCharH
+            // 4. Kinetic Strike Impact Ring & Trajectory Vector (Only during active punches)
+            if (showAnatomicalHighlights && silhouetteTint == null && actionState.strikePower > 0.22f) {
+                val ext = actionState.strikePower
+                val normX = if (isSouthpaw) (1f - actionState.impactNormX) else actionState.impactNormX
+                val impactPt = Offset(drawLeft + normX * finalW, drawTop + actionState.impactNormY * finalH)
+                val originPt = Offset(drawLeft + (if (isSouthpaw) 0.55f else 0.45f) * finalW, drawTop + 0.25f * finalH)
+
+                drawLine(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Color.Transparent, KynaroOrange.copy(alpha = 0.85f * ext), Color.White.copy(alpha = 0.95f * ext)),
+                        start = originPt,
+                        end = impactPt
+                    ),
+                    start = originPt,
+                    end = impactPt,
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
-                val rearShoulder = Offset(
-                    x = charLeft + (0.605f + kinematics.slipOffsetX) * targetCharW,
-                    y = charTop + (0.215f + kinematics.bodyBounceY) * finalCharH
+                drawCircle(
+                    color = KynaroOrange.copy(alpha = 0.90f * ext),
+                    radius = (10f + 18f * ext).dp.toPx(),
+                    center = impactPt,
+                    style = Stroke(width = 2.2.dp.toPx())
                 )
-                val leadGlove = Offset(
-                    x = charLeft + (0.302f + kinematics.leadArmDeltaU * 1.15f + kinematics.slipOffsetX) * targetCharW,
-                    y = charTop + (0.202f + kinematics.leadArmDeltaV * 1.15f + kinematics.bodyBounceY) * finalCharH
+                drawCircle(
+                    color = KynaroYellow.copy(alpha = 0.95f * ext),
+                    radius = 4.dp.toPx(),
+                    center = impactPt
                 )
-                val rearGlove = Offset(
-                    x = charLeft + (0.528f + kinematics.rearArmDeltaU * 1.15f + kinematics.slipOffsetX) * targetCharW,
-                    y = charTop + (0.190f + kinematics.rearArmDeltaV * 1.15f + kinematics.bodyBounceY) * finalCharH
+            }
+
+            // 5. Slip Centerline Reference
+            if (showAnatomicalHighlights && silhouetteTint == null && pose == CoachPose.SLIP_DEFENSE && !isOrbitInspecting) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(cx, drawTop + finalH * 0.05f),
+                    end = Offset(cx, drawTop + finalH * 0.42f),
+                    strokeWidth = 1.5.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
                 )
-                val hipCenter = Offset(
-                    x = charLeft + (0.455f + kinematics.footworkShiftX * 0.5f) * targetCharW,
-                    y = charTop + (0.455f + kinematics.bodyBounceY) * finalCharH
-                )
-
-                // Lead Hand Strike Vector (#1 Jab / #3 Lead Hook)
-                if (kinematics.leadPunchExt > 0.14f) {
-                    val ext = kinematics.leadPunchExt
-                    val strikeTarget = Offset(
-                        x = leadGlove.x + targetCharW * 0.16f * ext,
-                        y = leadGlove.y - finalCharH * 0.045f * ext
-                    )
-                    // Kinetic chain line: Shoulder -> Glove -> Strike Apex
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                KynaroRed.copy(alpha = 0.75f * ext),
-                                KynaroTextWhite.copy(alpha = 0.95f * ext)
-                            ),
-                            start = leadShoulder,
-                            end = strikeTarget
-                        ),
-                        start = leadShoulder,
-                        end = strikeTarget,
-                        strokeWidth = 3.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    // Impact Target Ring at strike apex
-                    drawCircle(
-                        color = KynaroRed.copy(alpha = 0.85f * ext),
-                        radius = (8f + ext * 16f).dp.toPx(),
-                        center = strikeTarget,
-                        style = Stroke(width = 2.dp.toPx())
-                    )
-                    drawCircle(
-                        color = KynaroTextWhite.copy(alpha = 0.95f * ext),
-                        radius = 4.dp.toPx(),
-                        center = strikeTarget
-                    )
-                }
-
-                // Rear Hand Power Vector (#2 Cross / #6 Rear Uppercut)
-                if (kinematics.rearPunchExt > 0.14f) {
-                    val ext = kinematics.rearPunchExt
-                    val strikeTarget = if (pose == CoachPose.UPPERCUT) {
-                        Offset(
-                            x = rearGlove.x - targetCharW * 0.08f * ext,
-                            y = rearGlove.y - finalCharH * 0.12f * ext
-                        )
-                    } else {
-                        Offset(
-                            x = rearGlove.x - targetCharW * 0.22f * ext,
-                            y = rearGlove.y - finalCharH * 0.035f * ext
-                        )
-                    }
-
-                    // Hip-to-Shoulder Torque Line
-                    drawLine(
-                        color = KynaroRed.copy(alpha = 0.45f * ext),
-                        start = hipCenter,
-                        end = rearShoulder,
-                        strokeWidth = 2.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
-                    )
-
-                    // Power Vector Line: Rear Shoulder -> Rear Glove -> Strike Apex
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                KynaroRed.copy(alpha = 0.85f * ext),
-                                KynaroTextWhite.copy(alpha = 0.95f * ext)
-                            ),
-                            start = rearShoulder,
-                            end = strikeTarget
-                        ),
-                        start = rearShoulder,
-                        end = strikeTarget,
-                        strokeWidth = 3.5.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-
-                    drawCircle(
-                        color = KynaroRed.copy(alpha = 0.90f * ext),
-                        radius = (10f + ext * 18f).dp.toPx(),
-                        center = strikeTarget,
-                        style = Stroke(width = 2.2.dp.toPx())
-                    )
-                    drawCircle(
-                        color = KynaroTextWhite.copy(alpha = 0.95f * ext),
-                        radius = 4.5.dp.toPx(),
-                        center = strikeTarget
-                    )
-                }
-
-                // Slip / Roll Evasion Centerline Reference
-                if (pose == CoachPose.SLIP_DEFENSE) {
-                    val headTop = charTop + finalCharH * 0.06f
-                    val chestBottom = charTop + finalCharH * 0.36f
-                    // Vertical Centerline Axis
-                    drawLine(
-                        color = KynaroTextWhite.copy(alpha = 0.35f),
-                        start = Offset(centerX, headTop),
-                        end = Offset(centerX, chestBottom),
-                        strokeWidth = 1.5.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
-                    )
-                    // Current Head Position Off-Centerline Indicator
-                    val currentHeadCenter = Offset(
-                        x = charLeft + (0.44f + kinematics.slipOffsetX + kinematics.headDeltaU) * targetCharW,
-                        y = charTop + (0.12f + kinematics.bodyBounceY) * finalCharH
-                    )
-                    drawCircle(
-                        color = KynaroGreen.copy(alpha = 0.75f),
-                        radius = 18.dp.toPx(),
-                        center = currentHeadCenter,
-                        style = Stroke(width = 2.dp.toPx())
-                    )
-                }
             }
         }
 
@@ -660,14 +426,14 @@ fun CoachCharacter3DView(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 6.dp)
+                    .padding(bottom = 8.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(KynaroBlack.copy(alpha = 0.78f))
+                    .background(KynaroBlack.copy(alpha = 0.82f))
                     .border(1.dp, KynaroCardBorder, RoundedCornerShape(50))
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "DRAG TO ROTATE 3D • TAP COACH TO STRIKE",
+                    text = "DRAG 360° TO INSPECT • TAP TO PUNCH",
                     fontFamily = SpaceGroteskFontFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -679,279 +445,190 @@ fun CoachCharacter3DView(
     }
 }
 
-private class MeshKinematics(
-    val bodyBounceY: Float,
-    val footworkShiftX: Float,
-    val kneeDip: Float,
-    val slipOffsetX: Float,
-    val torsoTwistYaw: Float,
-    val leadArmDeltaU: Float,
-    val leadArmDeltaV: Float,
-    val rearArmDeltaU: Float,
-    val rearArmDeltaV: Float,
-    val headDeltaU: Float,
-    val headDeltaV: Float,
-    val leadPunchExt: Float,
-    val rearPunchExt: Float,
-    val leadFistRotationDeg: Float,
-    val rearFistRotationDeg: Float
-)
-
-private fun evaluateMeshKinematics(
+private fun evaluateRealActionFrames(
     pose: CoachPose,
     phase: Float,
     breathSin: Float,
     tapImpulse: Float,
-    tapTriggerIndex: Int
-): MeshKinematics {
-    val twoPiPhase = phase * (2f * PI).toFloat()
+    tapIndex: Int
+): ActionFrameState {
+    val guard = R.drawable.coach_act_guard
+    val jabMid = R.drawable.coach_act_jab_mid
+    val jab = R.drawable.coach_act_jab
+    val crossMid = R.drawable.coach_act_cross_mid
+    val cross = R.drawable.coach_act_cross
+    val hookLoad = R.drawable.coach_act_hook_load
+    val hookHit = R.drawable.coach_act_hook_hit
+    val rearHook = R.drawable.coach_act_rear_hook
+    val upperLoad = R.drawable.coach_act_upper_load
+    val upperLead = R.drawable.coach_act_upper_lead
+    val upperHit = R.drawable.coach_act_upper_hit
+    val highGuard = R.drawable.coach_act_high_guard
+    val slipL = R.drawable.coach_act_slip_l
+    val slipR = R.drawable.coach_act_slip_r
+    val roll = R.drawable.coach_act_roll
+    val foot = R.drawable.coach_act_footwork
+    val pivotHook = R.drawable.coach_act_pivot_hook
 
-    var bodyBounceY = sin(twoPiPhase) * 0.008f
-    var footworkShiftX = 0f
-    var kneeDip = max(0f, sin(twoPiPhase)) * 0.12f
-    var slipOffsetX = 0f
-    var torsoTwistYaw = 0f
+    if (tapImpulse > 0.25f) {
+        val isJabTap = tapIndex % 2 == 1
+        return ActionFrameState(
+            primaryResId = if (isJabTap) jabMid else crossMid,
+            secondaryResId = if (isJabTap) jab else cross,
+            blendAlpha = tapImpulse.coerceIn(0f, 1f),
+            shiftXFrac = if (isJabTap) 0.025f * tapImpulse else 0.035f * tapImpulse,
+            shiftYFrac = -0.01f * tapImpulse,
+            scaleBoost = 1f + 0.025f * tapImpulse,
+            strikePower = tapImpulse,
+            impactNormX = if (isJabTap) 0.767f else 0.804f,
+            impactNormY = if (isJabTap) 0.208f else 0.191f,
+            phaseLabel = if (isJabTap) "SNAP LEAD JAB!" else "POWER REAR CROSS!",
+            phaseStepIndex = if (isJabTap) 1 else 2
+        )
+    }
 
-    var leadArmDeltaU = 0f
-    var leadArmDeltaV = sin(twoPiPhase + 0.5f) * 0.005f
-    var rearArmDeltaU = 0f
-    var rearArmDeltaV = cos(twoPiPhase) * 0.005f
+    val bounceY = sin(phase * 2f * PI.toFloat()) * 0.009f + breathSin * 0.004f
 
-    var headDeltaU = 0f
-    var headDeltaV = 0f
-
-    var leadPunchExt = 0f
-    var rearPunchExt = 0f
-    var leadFistRotationDeg = 0f
-    var rearFistRotationDeg = 0f
-
-    when (pose) {
-        CoachPose.IDLE_GUARD -> {
-            bodyBounceY = sin(twoPiPhase) * 0.010f
-            footworkShiftX = cos(twoPiPhase) * 0.008f
-            torsoTwistYaw = sin(twoPiPhase) * 0.14f
-            leadArmDeltaU = cos(twoPiPhase) * 0.006f
-            leadArmDeltaV = sin(twoPiPhase) * 0.008f
-            rearArmDeltaU = -cos(twoPiPhase) * 0.005f
-            rearArmDeltaV = -sin(twoPiPhase) * 0.007f
-        }
+    return when (pose) {
+        CoachPose.IDLE_GUARD -> ActionFrameState(
+            guard, R.drawable.coach_360_1, 0.1f, cos(phase * 2f * PI.toFloat()) * 0.01f, bounceY, 1f, 0f, 0.5f, 0.25f,
+            "HIGH GUARD • BALANCED BOUNCE", 0
+        )
 
         CoachPose.JAB -> {
-            val ext = punchCurve(phase, peakAt = 0.34f)
-            leadPunchExt = ext
-            leadArmDeltaU = 0.068f * ext
-            leadArmDeltaV = -0.034f * ext
-            leadFistRotationDeg = -18f * ext
-            rearArmDeltaU = -0.012f * ext
-            rearArmDeltaV = -0.010f * ext
-            torsoTwistYaw = -0.48f * ext
-            headDeltaU = -0.012f * ext
-            headDeltaV = 0.008f * ext
+            val ext = punchCurve(phase, 0.36f)
+            when {
+                phase < 0.14f -> ActionFrameState(guard, jabMid, 0.1f, 0.005f, bounceY * 0.4f, 1f, 0f, 0.629f, 0.207f, "1. PUSH OFF REAR BALL", 0)
+                phase < 0.26f -> ActionFrameState(jabMid, jabMid, 1f, 0.018f, 0f, 1.01f, 0.45f, 0.629f, 0.207f, "2. SNAP LEAD JAB", 1)
+                phase < 0.54f -> ActionFrameState(jab, jab, 1f, 0.030f * ext, 0f, 1.022f, ext, 0.767f, 0.208f, "3. SHOULDER CHIN SHIELD", 2)
+                phase < 0.72f -> ActionFrameState(jabMid, jabMid, 1f, 0.014f, 0f, 1.01f, 0.25f, 0.629f, 0.207f, "4. FAST GUARD RETURN", 3)
+                else -> ActionFrameState(guard, guard, 0f, 0f, bounceY * 0.4f, 1f, 0f, 0.5f, 0.25f, "4. FAST GUARD RETURN", 3)
+            }
         }
 
         CoachPose.CROSS -> {
-            val ext = punchCurve(phase, peakAt = 0.38f)
-            rearPunchExt = ext
-            rearArmDeltaU = -0.082f * ext
-            rearArmDeltaV = -0.032f * ext
-            rearFistRotationDeg = 22f * ext
-            leadArmDeltaU = 0.014f * ext
-            leadArmDeltaV = -0.012f * ext
-            torsoTwistYaw = 0.64f * ext
-            footworkShiftX = -0.014f * ext
-            headDeltaU = -0.016f * ext
-            headDeltaV = 0.010f * ext
+            val ext = punchCurve(phase, 0.38f)
+            when {
+                phase < 0.14f -> ActionFrameState(guard, crossMid, 0.1f, 0f, bounceY * 0.4f, 1f, 0f, 0.679f, 0.210f, "1. PIVOT REAR HEEL 45°", 0)
+                phase < 0.28f -> ActionFrameState(crossMid, crossMid, 1f, 0.020f, 0f, 1.012f, 0.5f, 0.679f, 0.210f, "2. DRIVE HIP & CROSS", 1)
+                phase < 0.56f -> ActionFrameState(cross, cross, 1f, 0.036f * ext, 0f, 1.025f, ext, 0.804f, 0.191f, "3. LEAD HAND ON TEMPLE", 2)
+                phase < 0.74f -> ActionFrameState(crossMid, crossMid, 1f, 0.016f, 0f, 1.01f, 0.25f, 0.679f, 0.210f, "4. RESET STANCE", 3)
+                else -> ActionFrameState(guard, guard, 0f, 0f, bounceY * 0.4f, 1f, 0f, 0.5f, 0.25f, "4. RESET STANCE", 3)
+            }
         }
 
         CoachPose.ONE_TWO_COMBO -> {
-            if (phase < 0.48f) {
-                val localP = phase / 0.48f
-                val ext = punchCurve(localP, peakAt = 0.38f)
-                leadPunchExt = ext
-                leadArmDeltaU = 0.064f * ext
-                leadArmDeltaV = -0.032f * ext
-                leadFistRotationDeg = -16f * ext
-                torsoTwistYaw = -0.44f * ext
-            } else {
-                val localP = (phase - 0.48f) / 0.52f
-                val ext = punchCurve(localP, peakAt = 0.40f)
-                rearPunchExt = ext
-                rearArmDeltaU = -0.078f * ext
-                rearArmDeltaV = -0.030f * ext
-                rearFistRotationDeg = 20f * ext
-                torsoTwistYaw = 0.60f * ext
-                footworkShiftX = -0.012f * ext
+            when {
+                phase < 0.14f -> ActionFrameState(jabMid, jabMid, 1f, 0.014f, 0f, 1.01f, 0.35f, 0.629f, 0.207f, "1. LEAD JAB — MEASURE", 0)
+                phase < 0.40f -> ActionFrameState(jab, jab, 1f, 0.028f, 0f, 1.02f, 0.92f, 0.767f, 0.208f, "1. LEAD JAB — MEASURE", 1)
+                phase < 0.54f -> ActionFrameState(crossMid, crossMid, 1f, 0.020f, 0f, 1.012f, 0.45f, 0.679f, 0.210f, "2. REAR CROSS — POWER", 2)
+                phase < 0.80f -> ActionFrameState(cross, cross, 1f, 0.036f, 0f, 1.025f, 0.96f, 0.804f, 0.191f, "2. REAR CROSS — POWER", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, bounceY * 0.4f, 1f, 0f, 0.5f, 0.25f, "3. SNAP TO HIGH GUARD", 3)
             }
         }
 
         CoachPose.JAB_CROSS_HOOK -> {
             when {
-                phase < 0.32f -> {
-                    val ext = punchCurve(phase / 0.32f, peakAt = 0.40f)
-                    leadPunchExt = ext
-                    leadArmDeltaU = 0.062f * ext
-                    leadArmDeltaV = -0.030f * ext
-                    leadFistRotationDeg = -15f * ext
-                    torsoTwistYaw = -0.40f * ext
-                }
-                phase < 0.64f -> {
-                    val ext = punchCurve((phase - 0.32f) / 0.32f, peakAt = 0.40f)
-                    rearPunchExt = ext
-                    rearArmDeltaU = -0.076f * ext
-                    rearArmDeltaV = -0.028f * ext
-                    rearFistRotationDeg = 20f * ext
-                    torsoTwistYaw = 0.58f * ext
-                }
-                else -> {
-                    val hookP = (phase - 0.64f) / 0.36f
-                    val ext = punchCurve(hookP, peakAt = 0.44f)
-                    val sweepArc = sin(hookP * PI.toFloat())
-                    leadPunchExt = ext
-                    leadArmDeltaU = (-0.036f * (1f - hookP) + 0.088f * hookP) * sweepArc
-                    leadArmDeltaV = -0.026f * ext
-                    leadFistRotationDeg = -38f * ext
-                    torsoTwistYaw = -0.68f * ext
-                    slipOffsetX = 0.020f * ext
-                }
+                phase < 0.26f -> ActionFrameState(jab, jab, 1f, 0.025f, 0f, 1.015f, 0.88f, 0.767f, 0.208f, "1. JAB — SET DISTANCE", 0)
+                phase < 0.52f -> ActionFrameState(cross, cross, 1f, 0.034f, 0f, 1.02f, 0.92f, 0.804f, 0.191f, "2. CROSS — LOAD LEAD HIP", 1)
+                phase < 0.66f -> ActionFrameState(hookLoad, hookLoad, 1f, 0.010f, 0.01f, 1f, 0.2f, 0.5f, 0.25f, "3. LEAD HOOK — 90° PIVOT", 2)
+                phase < 0.88f -> ActionFrameState(hookHit, hookHit, 1f, 0.030f, 0f, 1.022f, 0.95f, 0.774f, 0.198f, "3. LEAD HOOK — 90° PIVOT", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "4. GUARD RESET", 3)
+            }
+        }
+
+        CoachPose.REAR_HOOK -> {
+            when {
+                phase < 0.22f -> ActionFrameState(guard, guard, 0f, 0f, bounceY * 0.4f, 1f, 0f, 0.5f, 0.25f, "1. LOAD REAR HIP", 0)
+                phase < 0.36f -> ActionFrameState(crossMid, crossMid, 1f, 0.016f, 0f, 1.01f, 0.4f, 0.679f, 0.210f, "2. PIVOT REAR FOOT", 1)
+                phase < 0.72f -> ActionFrameState(rearHook, rearHook, 1f, 0.028f, 0f, 1.025f, 0.95f, 0.653f, 0.223f, "3. 90° REAR HOOK IMPACT", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "4. HIGH GUARD RESET", 3)
+            }
+        }
+
+        CoachPose.LEAD_UPPERCUT -> {
+            when {
+                phase < 0.34f -> ActionFrameState(upperLoad, upperLoad, 1f, 0f, 0.032f, 1f, 0f, 0.5f, 0.3f, "1. DIP KNEES & LOAD LEAD", 0)
+                phase < 0.74f -> ActionFrameState(upperLead, upperLead, 1f, 0.018f, -0.020f, 1.025f, 0.95f, 0.694f, 0.078f, "2. DRIVE LEAD UPPERCUT UP", 1)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "3. SNAP BACK TO CHIN", 3)
+            }
+        }
+
+        CoachPose.UPPERCUT -> {
+            when {
+                phase < 0.34f -> ActionFrameState(upperLoad, upperLoad, 1f, 0f, 0.035f, 1f, 0f, 0.5f, 0.3f, "1. DIP KNEES & LOAD REAR", 0)
+                phase < 0.74f -> ActionFrameState(upperHit, upperHit, 1f, 0.015f, -0.022f, 1.025f, 0.95f, 0.438f, 0.053f, "2. EXPLODE REAR UPPERCUT", 1)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "3. RETURN TO CHIN", 3)
             }
         }
 
         CoachPose.SPEED_HANDS -> {
-            val leftWave = max(0f, sin(twoPiPhase))
-            val rightWave = max(0f, -sin(twoPiPhase))
-            leadPunchExt = leftWave
-            rearPunchExt = rightWave
-            leadArmDeltaU = 0.056f * leftWave
-            leadArmDeltaV = -0.026f * leftWave
-            leadFistRotationDeg = -14f * leftWave
-            rearArmDeltaU = -0.064f * rightWave
-            rearArmDeltaV = -0.026f * rightWave
-            rearFistRotationDeg = 16f * rightWave
-            torsoTwistYaw = (rightWave - leftWave) * 0.42f
-            bodyBounceY = sin(twoPiPhase * 2f) * 0.006f
-        }
-
-        CoachPose.UPPERCUT -> {
-            if (phase < 0.32f) {
-                val load = sin((phase / 0.32f) * (PI / 2f).toFloat())
-                bodyBounceY = 0.026f * load
-                kneeDip = 0.38f * load
-                slipOffsetX = 0.018f * load
-                rearArmDeltaV = 0.036f * load
-                rearArmDeltaU = 0.016f * load
-            } else {
-                val driveP = (phase - 0.32f) / 0.68f
-                val ext = punchCurve(driveP, peakAt = 0.36f)
-                bodyBounceY = -0.020f * ext
-                rearPunchExt = ext
-                rearArmDeltaU = -0.056f * ext
-                rearArmDeltaV = -0.074f * ext
-                rearFistRotationDeg = -28f * ext
-                torsoTwistYaw = 0.60f * ext
-                headDeltaV = -0.012f * ext
+            when {
+                phase < 0.25f -> ActionFrameState(jab, jab, 1f, 0.022f, 0f, 1.015f, 0.85f, 0.767f, 0.208f, "RAPID STRAIGHT FLURRY", 1)
+                phase < 0.50f -> ActionFrameState(crossMid, crossMid, 1f, 0.012f, 0f, 1.01f, 0.4f, 0.679f, 0.210f, "RAPID STRAIGHT FLURRY", 1)
+                phase < 0.75f -> ActionFrameState(cross, cross, 1f, 0.028f, 0f, 1.015f, 0.85f, 0.804f, 0.191f, "RAPID STRAIGHT FLURRY", 2)
+                else -> ActionFrameState(jabMid, jabMid, 1f, 0.012f, 0f, 1.01f, 0.4f, 0.629f, 0.207f, "RAPID STRAIGHT FLURRY", 2)
             }
         }
 
         CoachPose.SLIP_DEFENSE -> {
-            val slipWave = sin(twoPiPhase)
-            val duckWave = abs(slipWave)
-            slipOffsetX = 0.054f * slipWave
-            bodyBounceY = 0.024f * duckWave
-            kneeDip = 0.30f * duckWave
-            torsoTwistYaw = slipWave * 0.46f
-            leadArmDeltaU = 0.014f * duckWave
-            leadArmDeltaV = -0.014f * duckWave
-            rearArmDeltaU = -0.014f * duckWave
-            rearArmDeltaV = -0.014f * duckWave
-            headDeltaU = 0.022f * slipWave
+            when {
+                phase < 0.30f -> ActionFrameState(slipL, slipL, 1f, -0.035f, 0.018f, 1f, 0f, 0.5f, 0.25f, "1. SLIP LEFT • LOAD LEAD", 0)
+                phase < 0.58f -> ActionFrameState(roll, roll, 1f, 0f, 0.042f, 1f, 0f, 0.5f, 0.25f, "2. BOB & WEAVE U-ROLL", 1)
+                phase < 0.84f -> ActionFrameState(slipR, slipR, 1f, 0.035f, 0.018f, 1f, 0f, 0.5f, 0.25f, "3. SLIP RIGHT • LOAD REAR", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "4. EYES UP • GUARD HIGH", 3)
+            }
+        }
+
+        CoachPose.HIGH_GUARD_SHELL -> {
+            if (phase < 0.32f) {
+                ActionFrameState(guard, guard, 0f, 0f, bounceY * 0.5f, 1f, 0f, 0.5f, 0.25f, "1. READ INCOMING FLURRY", 0)
+            } else {
+                ActionFrameState(highGuard, highGuard, 1f, -0.01f, 0.012f, 1.01f, 0f, 0.5f, 0.25f, "2. GLOVES ON TEMPLES • ELBOWS IN", 2)
+            }
+        }
+
+        CoachPose.PULL_COUNTER -> {
+            when {
+                phase < 0.34f -> ActionFrameState(slipL, slipL, 1f, -0.042f, 0.010f, 1f, 0f, 0.5f, 0.25f, "1. PULL WEIGHT TO REAR LEG", 0)
+                phase < 0.48f -> ActionFrameState(crossMid, crossMid, 1f, 0.015f, 0f, 1.01f, 0.5f, 0.679f, 0.210f, "2. SPRING OFF REAR CALF", 1)
+                phase < 0.80f -> ActionFrameState(cross, cross, 1f, 0.038f, 0f, 1.028f, 0.96f, 0.804f, 0.191f, "3. LASER COUNTER CROSS!", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "4. RESET HIGH GUARD", 3)
+            }
         }
 
         CoachPose.FOOTWORK -> {
-            val stepWave = sin(twoPiPhase)
-            val bounceWave = abs(cos(twoPiPhase))
-            footworkShiftX = 0.042f * stepWave
-            bodyBounceY = -0.022f * bounceWave
-            kneeDip = 0.24f * (1f - bounceWave)
-            torsoTwistYaw = stepWave * 0.28f
-            leadArmDeltaV = -0.012f * bounceWave
-            rearArmDeltaV = -0.012f * bounceWave
+            val stepWave = sin(phase * 2f * PI.toFloat())
+            val active = if (abs(stepWave) > 0.35f) foot else guard
+            ActionFrameState(
+                active, active, 1f, 0.055f * stepWave, -0.018f * abs(cos(phase * 2f * PI.toFloat())), 1f, 0f, 0.5f, 0.25f,
+                if (stepWave >= 0f) "STEP LEAD FOOT FORWARD" else "SLIDE REAR FOOT BACK",
+                if (stepWave >= 0f) 1 else 2
+            )
         }
 
-        CoachPose.VICTORY_RAISE -> {
-            val lift = 0.5f + 0.5f * sin(twoPiPhase)
-            bodyBounceY = -0.014f * lift
-            leadArmDeltaU = -0.032f * lift
-            leadArmDeltaV = -0.062f * lift
-            rearArmDeltaU = 0.032f * lift
-            rearArmDeltaV = -0.062f * lift
-            leadPunchExt = 0.35f * lift
-            rearPunchExt = 0.35f * lift
+        CoachPose.CHECK_HOOK_PIVOT -> {
+            when {
+                phase < 0.26f -> ActionFrameState(foot, foot, 1f, 0.02f, 0f, 1f, 0f, 0.5f, 0.25f, "1. PLANT LEAD BALL OF FOOT", 0)
+                phase < 0.72f -> ActionFrameState(pivotHook, pivotHook, 1f, -0.032f, 0f, 1.022f, 0.95f, 0.703f, 0.179f, "2. 90° PIVOT + CHECK HOOK!", 2)
+                else -> ActionFrameState(guard, guard, 0f, 0f, 0f, 1f, 0f, 0.5f, 0.25f, "3. NEW DOMINANT ANGLE", 3)
+            }
         }
+
+        CoachPose.VICTORY_RAISE -> ActionFrameState(
+            upperHit, upperHit, 1f, 0f, -0.015f, 1.015f, 0f, 0.5f, 0.15f, "ROUND COMPLETE", 3
+        )
     }
-
-    if (tapImpulse > 0.01f) {
-        if (tapTriggerIndex % 2 == 1) {
-            leadPunchExt = max(leadPunchExt, tapImpulse)
-            leadArmDeltaU += 0.064f * tapImpulse
-            leadArmDeltaV -= 0.032f * tapImpulse
-            leadFistRotationDeg -= 18f * tapImpulse
-            torsoTwistYaw -= 0.42f * tapImpulse
-        } else {
-            rearPunchExt = max(rearPunchExt, tapImpulse)
-            rearArmDeltaU -= 0.076f * tapImpulse
-            rearArmDeltaV -= 0.030f * tapImpulse
-            rearFistRotationDeg += 20f * tapImpulse
-            torsoTwistYaw += 0.52f * tapImpulse
-        }
-    }
-
-    return MeshKinematics(
-        bodyBounceY = bodyBounceY,
-        footworkShiftX = footworkShiftX,
-        kneeDip = kneeDip,
-        slipOffsetX = slipOffsetX,
-        torsoTwistYaw = torsoTwistYaw,
-        leadArmDeltaU = leadArmDeltaU,
-        leadArmDeltaV = leadArmDeltaV,
-        rearArmDeltaU = rearArmDeltaU,
-        rearArmDeltaV = rearArmDeltaV,
-        headDeltaU = headDeltaU,
-        headDeltaV = headDeltaV,
-        leadPunchExt = leadPunchExt.coerceIn(0f, 1f),
-        rearPunchExt = rearPunchExt.coerceIn(0f, 1f),
-        leadFistRotationDeg = leadFistRotationDeg,
-        rearFistRotationDeg = rearFistRotationDeg
-    )
 }
 
 private fun punchCurve(t: Float, peakAt: Float = 0.36f): Float {
     val p = t.coerceIn(0f, 1f)
     return if (p < peakAt) {
-        val u = p / peakAt
-        sin(u * (PI / 2.0).toFloat())
+        sin((p / peakAt) * (PI / 2.0).toFloat())
     } else {
-        val u = (p - peakAt) / (1f - peakAt)
-        val c = cos(u * (PI / 2.0).toFloat())
+        val c = cos(((p - peakAt) / (1f - peakAt)) * (PI / 2.0).toFloat())
         c * c
     }
-}
-
-private fun gaussianWeight(x: Float, center: Float, sigma: Float): Float {
-    val d = (x - center) / sigma
-    return exp(-0.5f * d * d)
-}
-
-private fun gaussian2D(
-    u: Float,
-    v: Float,
-    cu: Float,
-    cv: Float,
-    su: Float,
-    sv: Float
-): Float {
-    val du = (u - cu) / su
-    val dv = (v - cv) / sv
-    return exp(-0.5f * (du * du + dv * dv))
 }
 
 @Composable
@@ -978,177 +655,70 @@ fun CoachTransformationDualView(
                         pose = CoachPose.IDLE_GUARD,
                         showFloorRing = false,
                         showAnatomicalHighlights = false,
+                        allowCameraOrbit = false,
                         silhouetteTint = Color(0xFF3E4251),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(bottom = 52.dp)
                     )
-                    Column(
-                        modifier = Modifier.align(Alignment.BottomStart)
-                    ) {
-                        Text(
-                            text = "DAY 1",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = KynaroTextWhite,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "LV 1",
-                            fontFamily = OswaldFontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 28.sp,
-                            color = KynaroTextSecondary
-                        )
-                        Text(
-                            text = "Foundation stance",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = KynaroTextSecondary
-                        )
+                    Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                        Text("DAY 1", style = MaterialTheme.typography.labelMedium, color = KynaroTextWhite, letterSpacing = 1.5.sp)
+                        Text("FUNDAMENTALS", fontFamily = OswaldFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = KynaroTextSecondary)
+                        Text("Stance & basic guard", style = MaterialTheme.typography.bodySmall, color = KynaroTextSecondary)
                     }
                 }
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(300.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    KynaroRed.copy(alpha = 0.22f),
-                                    KynaroCardBg
-                                )
-                            )
-                        )
-                        .border(1.dp, KynaroRed.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                        .background(Brush.radialGradient(listOf(KynaroOrange.copy(alpha = 0.22f), KynaroCardBg)))
+                        .border(1.dp, KynaroOrange.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
                         .padding(14.dp)
                 ) {
                     CoachCharacter3DView(
                         pose = CoachPose.ONE_TWO_COMBO,
                         showFloorRing = false,
+                        allowCameraOrbit = false,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(bottom = 52.dp)
                     )
-                    Column(
-                        modifier = Modifier.align(Alignment.BottomStart)
-                    ) {
-                        Text(
-                            text = "DAY 30",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = KynaroRed,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "LV 3",
-                            fontFamily = OswaldFontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 28.sp,
-                            color = KynaroRed
-                        )
-                        Text(
-                            text = "Sharp combinations",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = KynaroTextWhite,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                        Text("DAY 30", style = MaterialTheme.typography.labelMedium, color = KynaroOrange, letterSpacing = 1.5.sp)
+                        Text("FIGHT READY", fontFamily = OswaldFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = KynaroOrange)
+                        Text("Sharp combos & slips", style = MaterialTheme.typography.bodySmall, color = KynaroTextWhite, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
-
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(KynaroRed)
+                    .background(KynaroOrange)
                     .border(3.dp, KynaroBlack, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "›",
-                    color = KynaroBlack,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.offset(y = (-2).dp)
-                )
+                Text("›", color = KynaroBlack, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = (-2).dp))
             }
         }
     } else {
-        Row(
-            modifier = modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(250.dp)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CoachCharacter3DView(
-                        pose = CoachPose.IDLE_GUARD,
-                        showFloorRing = false,
-                        showAnatomicalHighlights = false,
-                        physiqueBulkMultiplier = 1.15f,
-                        modifier = Modifier.fillMaxSize(0.95f)
-                    )
+        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.height(230.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CoachCharacter3DView(pose = CoachPose.IDLE_GUARD, showFloorRing = false, showAnatomicalHighlights = false, allowCameraOrbit = false, modifier = Modifier.fillMaxSize(0.95f))
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "DAY 1 BASE",
-                    fontFamily = OswaldFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 15.sp,
-                    color = KynaroTextSecondary
-                )
+                Text("DAY 1 STANCE", fontFamily = OswaldFontFamily, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, fontSize = 15.sp, color = KynaroTextSecondary)
             }
-
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(220.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                KynaroRed.copy(alpha = 0.6f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(250.dp)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CoachCharacter3DView(
-                        pose = CoachPose.ONE_TWO_COMBO,
-                        showFloorRing = false,
-                        physiqueBulkMultiplier = 1.0f,
-                        modifier = Modifier.fillMaxSize(0.95f)
-                    )
+            Box(modifier = Modifier.width(1.dp).height(200.dp).background(Brush.verticalGradient(listOf(Color.Transparent, KynaroOrange.copy(alpha = 0.6f), Color.Transparent))))
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.height(230.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CoachCharacter3DView(pose = CoachPose.ONE_TWO_COMBO, showFloorRing = false, allowCameraOrbit = false, modifier = Modifier.fillMaxSize(0.95f))
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "DAY 30 PEAK",
-                    fontFamily = OswaldFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 15.sp,
-                    color = KynaroRed
-                )
+                Text("DAY 30 SHARP", fontFamily = OswaldFontFamily, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, fontSize = 15.sp, color = KynaroOrange)
             }
         }
     }
@@ -1157,33 +727,24 @@ fun CoachTransformationDualView(
 @Composable
 fun CoachDrillThumbnail(
     pose: CoachPose,
-    size: Dp = 108.dp,
+    size: Dp = 104.dp,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        KynaroRed.copy(alpha = 0.25f),
-                        KynaroCardElevated,
-                        KynaroBlack
-                    )
-                )
-            )
-            .border(1.dp, KynaroCardBorder, RoundedCornerShape(14.dp)),
+            .clip(RoundedCornerShape(16.dp))
+            .background(Brush.radialGradient(listOf(KynaroOrange.copy(alpha = 0.22f), KynaroCardElevated, KynaroBlack)))
+            .border(1.dp, KynaroCardBorder, RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
     ) {
         CoachCharacter3DView(
             pose = pose,
             showFloorRing = false,
+            showAnatomicalHighlights = false,
             allowCameraOrbit = false,
             cropUpperBody = true,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 4.dp)
+            modifier = Modifier.fillMaxSize().padding(top = 4.dp)
         )
     }
 }

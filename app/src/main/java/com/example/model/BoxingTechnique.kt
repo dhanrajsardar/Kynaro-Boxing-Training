@@ -105,7 +105,7 @@ object BoxingTechniqueRepository {
             subtitle = "Heavy rotational rear hook targeting the temple or ear from the outside.",
             category = BoxingCategory.PUNCH,
             level = "Power Striking",
-            pose = CoachPose.CROSS,
+            pose = CoachPose.REAR_HOOK,
             hallOfFameMaster = "Gennadiy Golovkin & Canelo Alvarez",
             kineticChainSummary = "Drive off rear foot -> Rotate rear hip completely across centerline -> Keep compact arch behind elbow -> Lead hand shields opposite side -> Snap fist through target.",
             checkpoints = listOf(
@@ -126,7 +126,7 @@ object BoxingTechniqueRepository {
             subtitle = "Inside strike fired vertically between the opponent's gloves.",
             category = BoxingCategory.PUNCH,
             level = "Inside Fighting",
-            pose = CoachPose.UPPERCUT,
+            pose = CoachPose.LEAD_UPPERCUT,
             hallOfFameMaster = "Roy Jones Jr. & Roberto Duran",
             kineticChainSummary = "Slight dip to lead side -> Drive upward through lead quad and glute -> Palm faces inward toward chest -> Elbow tucked against ribs -> Snap straight up through centerline.",
             checkpoints = listOf(
@@ -210,7 +210,7 @@ object BoxingTechniqueRepository {
             subtitle = "The impenetrable fortress defense that absorbs heavy firepower safely on gloves.",
             category = BoxingCategory.DEFENSE,
             level = "Guard Discipline",
-            pose = CoachPose.IDLE_GUARD,
+            pose = CoachPose.HIGH_GUARD_SHELL,
             hallOfFameMaster = "Arthur Abraham & Winky Wright",
             kineticChainSummary = "Elbows pinned to ribs -> Gloves placed firmly on forehead/temples -> Peep through the narrow slit between wrists -> Absorb impact on gloves and forearms.",
             checkpoints = listOf(
@@ -231,7 +231,7 @@ object BoxingTechniqueRepository {
             subtitle = "Master counter-punching maneuver made famous by Floyd Mayweather.",
             category = BoxingCategory.DEFENSE,
             level = "Elite Counter",
-            pose = CoachPose.CROSS,
+            pose = CoachPose.PULL_COUNTER,
             hallOfFameMaster = "Floyd Mayweather Jr.",
             kineticChainSummary = "Bait the jab -> Rock weight 70% onto back leg pulling head 2 inches back -> Opponent misses by millimeters -> Spring forward instantly with explosive #2 Rear Cross.",
             checkpoints = listOf(
@@ -273,7 +273,7 @@ object BoxingTechniqueRepository {
             subtitle = "Spin out of danger while landing a check hook, leaving your opponent swinging at air.",
             category = BoxingCategory.FOOTWORK,
             level = "Ring Generalship",
-            pose = CoachPose.FOOTWORK,
+            pose = CoachPose.CHECK_HOOK_PIVOT,
             hallOfFameMaster = "Floyd Mayweather (vs Ricky Hatton) & Dmitry Bivol",
             kineticChainSummary = "As opponent charges -> Plant lead ball of foot firmly -> Swing rear leg 90° clockwise -> Throw crisp #3 lead check hook -> Opponent crashes into the ropes.",
             checkpoints = listOf(
